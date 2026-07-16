@@ -1,0 +1,9 @@
+[project]
+name = "ai-ops-serverless"
+version = "0.1.0"
+
+dependencies = [
+    "boto3",
+    "pytest",
+    "ruff"
+]

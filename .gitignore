@@ -1,0 +1,17 @@
+# Terraform
+.terraform/
+*.tfplan
+*.tfstate
+*.tfstate.backup
+.terraform.lock.hcl
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+
+# OS
+.DS_Store
+.vscode/
+.idea/
