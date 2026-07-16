@@ -4,7 +4,7 @@ name: ci
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
 
 permissions:
@@ -96,7 +96,7 @@ jobs:
             });
 
   apply:
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') && github.event_name == 'push'
     needs: [python-tests, terraform-quality, security-scan]
     runs-on: ubuntu-latest
     environment: dev-apply   
