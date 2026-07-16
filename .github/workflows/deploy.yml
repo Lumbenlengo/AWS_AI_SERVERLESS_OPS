@@ -1,0 +1,116 @@
+# .github/workflows/deploy.yml
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  id-token: write  
+  contents: read
+  pull-requests: write
+
+env:
+  TF_DIR: terraform/environments/dev
+  AWS_REGION: us-east-1
+
+jobs:
+  python-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: pip install boto3 pytest ruff
+      - name: Lint (ruff)
+        run: ruff check functions/ demo-app/
+      - name: Unit tests
+        run: pytest functions/tests/ -v
+
+  terraform-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.*"
+      - name: terraform fmt
+        run: terraform fmt -check -recursive terraform/
+      - name: terraform validate
+        working-directory: ${{ env.TF_DIR }}
+        run: |
+          terraform init -backend=false
+          terraform validate
+      - uses: terraform-linters/setup-tflint@v4
+      - name: tflint
+        run: tflint --chdir=${{ env.TF_DIR }} --recursive
+
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkov (IaC security)
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: terraform/
+          framework: terraform
+          quiet: true
+          soft_fail: false
+
+  plan:
+    if: github.event_name == 'pull_request'
+    needs: [python-tests, terraform-quality, security-scan]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.*"
+      - name: terraform plan
+        id: plan
+        working-directory: ${{ env.TF_DIR }}
+        run: |
+          terraform init
+          terraform plan -no-color -input=false -out=tfplan 2>&1 | tee plan.txt
+      - name: Comment plan on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const plan = fs.readFileSync('${{ env.TF_DIR }}/plan.txt', 'utf8');
+            const body = `### Terraform plan\n\`\`\`\n${plan.slice(-60000)}\n\`\`\``;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            });
+
+  apply:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: [python-tests, terraform-quality, security-scan]
+    runs-on: ubuntu-latest
+    environment: dev-apply   
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.*"
+      - name: terraform apply
+        working-directory: ${{ env.TF_DIR }}
+        run: |
+          terraform init
+          terraform apply -auto-approve -input=false

@@ -1,0 +1,158 @@
+# .github/workflows/destroy.yml
+
+name: destroy
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "What to destroy"
+        required: true
+        type: choice
+        options:
+          - pause
+          - full   
+        default: pause
+      confirmation:
+        description: "Type 'destroy-dev' exactly to proceed"
+        required: true
+        type: string
+      reason:
+        description: "Why are you destroying this? (shows up in the audit trail)"
+        required: true
+        type: string
+
+permissions:
+  id-token: write   
+  contents: read
+
+env:
+  TF_DIR: terraform/environments/dev
+  AWS_REGION: us-east-1
+
+jobs:
+  # Fails fast, before touching AWS at all, if the typed confirmation is wrong.
+  validate-confirmation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check typed confirmation
+        run: |
+          if [ "${{ github.event.inputs.confirmation }}" != "destroy-dev" ]; then
+            echo "::error::Confirmation text did not match 'destroy-dev'. Aborting before touching AWS."
+            exit 1
+          fi
+          echo "Confirmation matched. Proceeding to plan."
+
+      - name: Record audit trail
+        run: |
+          {
+            echo "## Destroy requested"
+            echo "- **Triggered by:** ${{ github.actor }}"
+            echo "- **Target:** ${{ github.event.inputs.target }}"
+            echo "- **Reason:** ${{ github.event.inputs.reason }}"
+            echo "- **Time (UTC):** $(date -u +'%Y-%m-%d %H:%M:%S')"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  plan-destroy:
+    needs: validate-confirmation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.*"
+
+      - name: terraform init
+        working-directory: ${{ env.TF_DIR }}
+        run: terraform init
+
+      - name: terraform plan -destroy (pause — ecs_app only)
+        if: github.event.inputs.target == 'pause'
+        working-directory: ${{ env.TF_DIR }}
+        run: |
+          terraform plan -var="demo_app_enabled=false" -out=destroy.tfplan -no-color \
+            | tee plan.txt
+
+      - name: terraform plan -destroy (full)
+        if: github.event.inputs.target == 'full'
+        working-directory: ${{ env.TF_DIR }}
+        run: |
+          terraform plan -destroy -out=destroy.tfplan -no-color \
+            | tee plan.txt
+
+      - name: Post plan to run summary
+        working-directory: ${{ env.TF_DIR }}
+        run: |
+          {
+            echo "## Destroy plan (target: ${{ github.event.inputs.target }})"
+            echo '```'
+            tail -c 60000 plan.txt
+            echo '```'
+            echo ""
+            echo "**Review this carefully before approving the destroy job below.**"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # The exact plan file gets uploaded so the next job applies precisely
+      # what was reviewed here — never a freshly re-computed plan.
+      - name: Upload plan artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: destroy-plan
+          path: ${{ env.TF_DIR }}/destroy.tfplan
+          retention-days: 1
+
+  # Gated behind a manually-approved environment. Reviewer sees the plan
+  # posted in plan-destroy's summary before approving this job.
+  destroy:
+    needs: plan-destroy
+    runs-on: ubuntu-latest
+    environment: dev-destroy
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.*"
+
+      - name: terraform init
+        working-directory: ${{ env.TF_DIR }}
+        run: terraform init
+
+      - name: Download reviewed plan
+        uses: actions/download-artifact@v4
+        with:
+          name: destroy-plan
+          path: ${{ env.TF_DIR }}
+
+      - name: Apply the exact reviewed destroy plan
+        working-directory: ${{ env.TF_DIR }}
+        run: terraform apply destroy.tfplan
+
+      - name: Record completion
+        run: |
+          {
+            echo "## Destroy completed"
+            echo "- **Target:** ${{ github.event.inputs.target }}"
+            echo "- **Completed by approval from:** environment \`dev-destroy\` reviewer"
+            echo "- **Time (UTC):** $(date -u +'%Y-%m-%d %H:%M:%S')"
+            echo ""
+            if [ "${{ github.event.inputs.target }}" == "pause" ]; then
+              echo "ecs_app destroyed. Bring it back with a normal apply using"
+              echo "\`demo_app_enabled=true\` — everything else is untouched."
+            else
+              echo "Full environment destroyed. Terraform state backend"
+              echo "(S3 + DynamoDB from bootstrap.sh) was NOT touched — see"
+              echo "TEARDOWN.md Step 3 if you want that gone too."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
