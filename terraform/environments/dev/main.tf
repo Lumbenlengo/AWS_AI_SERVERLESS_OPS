@@ -1,7 +1,5 @@
 # terraform/environments/dev/main.tf
-#
-# Root configuration. Dependency graph is ACYCLIC.
-# Fix: Corrected module source paths for ecs_app and mission_control.
+
 
 terraform {
   required_version = ">= 1.5.0"
@@ -28,10 +26,11 @@ provider "aws" {
 
 data "aws_caller_identity" "current" {}
 
-# ── SNS ALERT TOPIC ──────────────────────────────────────────────────────────
+# SNS ALERT TOPIC
 
 resource "aws_sns_topic" "alerts" {
-  name = "${var.project_name}-${var.environment}-alerts"
+  name              = "${var.project_name}-${var.environment}-alerts"
+  kms_master_key_id = "alias/aws/sns" # fixes CKV_AWS_26, was unencrypted
 }
 
 resource "aws_sns_topic_subscription" "email" {
@@ -40,7 +39,7 @@ resource "aws_sns_topic_subscription" "email" {
   endpoint  = var.alert_email
 }
 
-# ── S3: RUNBOOKS BUCKET ──────────────────────────────────────────────────────
+# S3: RUNBOOKS BUCKET
 
 resource "aws_s3_bucket" "runbooks" {
   bucket        = "${var.project_name}-${var.environment}-runbooks-${data.aws_caller_identity.current.account_id}"
@@ -67,7 +66,7 @@ resource "aws_s3_bucket_public_access_block" "runbooks" {
   restrict_public_buckets = true
 }
 
-# ── MODULE: IAM ──────────────────────────────────────────────────────────────
+# MODULE: IAM
 
 module "iam" {
   source              = "../../modules/iam"
@@ -80,7 +79,8 @@ module "iam" {
   github_repository   = var.github_repository
 }
 
-# ── MODULE: LAMBDA ───────────────────────────────────────────────────────────
+# MODULE: LAMBDA
+# remediation_map now points at the demo app now that ecs_app exists.
 
 module "lambda" {
   source               = "../../modules/lambda"
@@ -109,7 +109,7 @@ module "lambda" {
   }
 }
 
-# ── MODULE: STEP FUNCTIONS ───────────────────────────────────────────────────
+# MODULE: STEP FUNCTIONS
 
 module "step_functions" {
   source                = "../../modules/step_functions"
@@ -120,7 +120,29 @@ module "step_functions" {
   remediator_lambda_arn = module.lambda.remediator_arn
 }
 
-# ── MODULE: API GATEWAY ──────────────────────────────────────────────────────
+# MODULE: EVENTBRIDGE
+
+module "eventbridge" {
+  source                   = "../../modules/eventbridge"
+  project_name             = var.project_name
+  environment              = var.environment
+  step_functions_arn       = module.step_functions.state_machine_arn
+  eventbridge_role_arn     = module.iam.eventbridge_sfn_role_arn
+  cost_reporter_lambda_arn = module.lambda.cost_reporter_arn
+}
+
+# MODULE: MONITORING
+
+module "monitoring" {
+  source             = "../../modules/monitoring"
+  project_name       = var.project_name
+  environment        = var.environment
+  aws_region         = var.aws_region
+  sns_topic_arn      = aws_sns_topic.alerts.arn
+  step_functions_arn = module.step_functions.state_machine_arn
+}
+
+# MODULE: API GATEWAY
 
 module "api_gateway" {
   source                       = "../../modules/api_gateway"
@@ -132,29 +154,7 @@ module "api_gateway" {
   api_daily_quota              = var.api_daily_quota
 }
 
-# ── MODULE: MONITORING ───────────────────────────────────────────────────────
-
-module "monitoring" {
-  source             = "../../modules/monitoring"
-  project_name       = var.project_name
-  environment        = var.environment
-  aws_region         = var.aws_region
-  sns_topic_arn      = aws_sns_topic.alerts.arn
-  step_functions_arn = module.step_functions.state_machine_arn
-}
-
-# ── MODULE: EVENTBRIDGE ──────────────────────────────────────────────────────
-
-module "eventbridge" {
-  source                   = "../../modules/eventbridge"
-  project_name             = var.project_name
-  environment              = var.environment
-  step_functions_arn       = module.step_functions.state_machine_arn
-  eventbridge_role_arn     = module.iam.eventbridge_sfn_role_arn
-  cost_reporter_lambda_arn = module.lambda.cost_reporter_arn
-}
-
-# ── MODULE: DEMO APP ─────────────────────────────────────────────────────────
+# MODULE: DEMO APP
 
 module "demo_app" {
   count        = var.demo_app_enabled ? 1 : 0
@@ -165,7 +165,7 @@ module "demo_app" {
   admin_cidr   = var.admin_cidr
 }
 
-# ── MODULE: MISSION CONTROL ──────────────────────────────────────────────────
+# MODULE: MISSION CONTROL
 
 module "mission_control" {
   source                       = "../../modules/mission_control"

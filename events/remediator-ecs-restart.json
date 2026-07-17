@@ -1,0 +1,13 @@
+{
+  "description": "Test remediator with ECS restart action — use after human approval in Step Functions",
+  "action": "restart_ecs_service",
+  "resource": "my-cluster/my-api-service",
+  "analysis": {
+    "alarm_name": "ai-ops-serverless-dev-lambda-error-anomaly",
+    "summary": "Lambda function experiencing connection pool exhaustion causing high error rate",
+    "root_cause": "Database connection pool not releasing connections after request timeout",
+    "recommended_action": "restart_ecs_service",
+    "urgency": "HIGH",
+    "resource": "my-cluster/my-api-service"
+  }
+}

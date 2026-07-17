@@ -1,0 +1,8 @@
+variable "project_name" { type = string }
+variable "environment" { type = string }
+variable "aws_region" { type = string }
+
+variable "admin_cidr" {
+  description = "CIDR allowed to reach the demo app on :8080"
+  type        = string
+}

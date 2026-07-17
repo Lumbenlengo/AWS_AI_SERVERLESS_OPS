@@ -1,0 +1,14 @@
+{
+  "description": "Input to manually start the Step Functions AI Ops workflow",
+  "detail-type": "CloudWatch Alarm State Change",
+  "source": "aws.cloudwatch",
+  "account": "678632990341",
+  "region": "us-east-1",
+  "detail": {
+    "alarmName": "ai-ops-serverless-dev-lambda-error-anomaly",
+    "state": {
+      "value": "ALARM",
+      "reason": "Manual test — simulating Lambda error anomaly for workflow validation"
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "description": "API Gateway proxy event — POST /ask to the runbook assistant",
+  "httpMethod": "POST",
+  "path": "/ask",
+  "headers": {
+    "Content-Type": "application/json",
+    "x-api-key": "replace-with-real-api-key"
+  },
+  "body": "{\"question\": \"How do I roll back a failed ECS deployment that is causing a high error rate?\"}",
+  "isBase64Encoded": false,
+  "requestContext": {
+    "resourcePath": "/ask",
+    "httpMethod": "POST",
+    "stage": "dev"
+  }
+}
