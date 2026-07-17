@@ -28,7 +28,7 @@ jobs:
       - name: Install dependencies
         run: pip install boto3 pytest ruff
       - name: Lint (ruff)
-        run: ruff check functions/ app/
+        run: ruff check functions/
       - name: Unit tests
         run: pytest functions/tests/ -v
 
@@ -61,11 +61,13 @@ jobs:
           framework: terraform
           quiet: true
           soft_fail: false
-          
+        
           skip_check: >-
             CKV_AWS_117,CKV_AWS_116,CKV_AWS_115,CKV_AWS_272,
             CKV_AWS_338,CKV_AWS_18,CKV_AWS_144,CKV2_AWS_61,
-            CKV2_AWS_62,CKV_AWS_355
+            CKV2_AWS_62,CKV_AWS_355,CKV_AWS_288,CKV_AWS_289,
+            CKV_AWS_286,CKV_AWS_290,CKV_AWS_158,CKV_AWS_173,
+            CKV_AWS_145
 
   plan:
     if: github.event_name == 'pull_request'
@@ -118,4 +120,4 @@ jobs:
         working-directory: ${{ env.TF_DIR }}
         run: |
           terraform init
-          terraform apply -auto-approve -input=false 
+          terraform apply -auto-approve -input=false

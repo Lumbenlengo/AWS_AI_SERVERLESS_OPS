@@ -4,20 +4,20 @@
 #
 # Flow:
 #   [Start]
-#      │
-#   [AI_Analysis]         ← Lambda calls Bedrock Claude
-#      │
-#   [Route_By_Urgency]    ← HIGH/CRITICAL → human gate, LOW → log and stop
-#      │
-#   [Notify_And_Wait]     ← Slack message + PAUSE (waitForTaskToken)
-#      │                    costs $0 while waiting, no timeout
+#      |
+#   [AI_Analysis]         Lambda calls Bedrock Claude
+#      |
+#   [Route_By_Urgency]    HIGH/CRITICAL -> human gate, LOW -> log and stop
+#      |
+#   [Notify_And_Wait]     Slack message + PAUSE (waitForTaskToken)
+#      |                  costs $0 while waiting, no timeout
 #   [Check_Approval]
-#      ├── approved=true  → [Remediate] → [Workflow_Complete]
-#      └── approved=false → [Rejected_By_Human]
+#      |-- approved=true  -> [Remediate] -> [Workflow_Complete]
+#      `-- approved=false -> [Rejected_By_Human]
 #
-# waitForTaskToken: the workflow pauses here. The Lambda sends a Slack message
-# containing the task token. The human runs an AWS CLI command with that token
-# to resume. No polling, no Lambda running while waiting.
+# waitForTaskToken: the workflow pauses here. The Lambda sends a Slack
+# message containing the task token. The human runs an AWS CLI command
+# with that token to resume. No polling, no Lambda running while waiting.
 
 resource "aws_cloudwatch_log_group" "sfn" {
   name              = "/aws/states/${var.project_name}-${var.environment}-ai-ops"
@@ -35,15 +35,20 @@ resource "aws_sfn_state_machine" "ai_ops" {
     level                  = "ALL"
   }
 
+
+  tracing_configuration {
+    enabled = true
+  }
+
   definition = jsonencode({
-    Comment = "AI Ops: Detect → AI Analyse → Human Approval Gate → Remediate"
+    Comment = "AI Ops: Detect, AI Analyse, Human Approval Gate, Remediate"
     StartAt = "AI_Analysis"
 
     States = {
 
       AI_Analysis = {
         Type     = "Task"
-        Comment  = "Call anomaly_analyser Lambda — it calls Bedrock Claude and returns structured JSON"
+        Comment  = "Call anomaly_analyser Lambda, it calls Bedrock Claude and returns structured JSON"
         Resource = "arn:aws:states:::lambda:invoke"
         Parameters = {
           FunctionName = var.analyser_lambda_arn
@@ -171,7 +176,7 @@ resource "aws_sfn_state_machine" "ai_ops" {
       Approval_Timeout = {
         Type  = "Fail"
         Error = "ApprovalTimeout"
-        Cause = "No human response within 24 hours — execution expired"
+        Cause = "No human response within 24 hours, execution expired"
       }
 
       Remediation_Failed = {

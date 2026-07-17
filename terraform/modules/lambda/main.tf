@@ -1,15 +1,5 @@
 # terraform/modules/lambda/main.tf
-#
-# Refactored from 4 copy-pasted blocks to a single for_each — one place to
-# change timeouts, tracing, or runtime for every function.
-#
-# CHANGED vs previous version:
-#   - Each function gets its OWN IAM role (passed in via lambda_role_arns).
-#   - anomaly_analyser receives REMEDIATION_MAP: the deterministic
-#     alarm -> {resource, allowed_actions} mapping (ADR 004). The AI never
-#     invents the remediation target; this map is the single source of truth.
-#   - AWS_REGION_NAME is used instead of AWS_REGION because AWS_REGION is a
-#     reserved env var set by the Lambda runtime itself.
+
 
 locals {
   prefix = "${var.project_name}-${var.environment}"
@@ -91,11 +81,4 @@ resource "aws_lambda_function" "fn" {
   tracing_config { mode = "Active" }
 
   depends_on = [aws_cloudwatch_log_group.fn]
-}
-
-resource "aws_lambda_permission" "allow_api_gateway" {
-  statement_id  = "AllowAPIGatewayInvoke"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.fn["runbook_assistant"].function_name
-  principal     = "apigateway.amazonaws.com"
 }

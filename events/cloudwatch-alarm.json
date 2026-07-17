@@ -1,0 +1,26 @@
+{
+  "description": "CloudWatch alarm state change — starts the AI Ops Step Functions workflow",
+  "version": "0",
+  "id": "c4c1c1c9-6542-e61b-6ef0-8c4d36933a92",
+  "detail-type": "CloudWatch Alarm State Change",
+  "source": "aws.cloudwatch",
+  "account": "678632990341",
+  "time": "2025-01-15T10:30:00Z",
+  "region": "us-east-1",
+  "resources": [
+    "arn:aws:cloudwatch:us-east-1:678632990341:alarm:ai-ops-serverless-dev-lambda-error-anomaly"
+  ],
+  "detail": {
+    "alarmName": "ai-ops-serverless-dev-lambda-error-anomaly",
+    "alarmDescription": "Lambda error rate is anomalously high — AI analysis triggered",
+    "state": {
+      "value": "ALARM",
+      "reason": "Threshold Crossed: 3 datapoints were greater than the upper threshold (5.0). The most recent datapoints: [12.0, 14.0, 13.0].",
+      "timestamp": "2025-01-15T10:30:00.000+0000"
+    },
+    "previousState": {
+      "value": "OK",
+      "timestamp": "2025-01-15T09:00:00.000+0000"
+    }
+  }
+}
