@@ -5,6 +5,11 @@ resource "aws_api_gateway_rest_api" "runbook" {
   description = "AI-powered runbook assistant. POST /ask with your operational question."
 
   endpoint_configuration { types = ["REGIONAL"] }
+
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_api_gateway_resource" "ask" {
@@ -37,10 +42,6 @@ resource "aws_api_gateway_method_response" "ok" {
   status_code = "200"
 }
 
-# The API Gateway invoke permission lives here, not in the lambda module.
-# It needs this module's own execution_arn, and the lambda module already
-# needs this module's output the other way around would create a circular
-# dependency between the two modules.
 resource "aws_lambda_permission" "allow_api_gateway" {
   statement_id  = "AllowAPIGatewayInvoke"
   action        = "lambda:InvokeFunction"
@@ -49,7 +50,6 @@ resource "aws_lambda_permission" "allow_api_gateway" {
   source_arn    = "${aws_api_gateway_rest_api.runbook.execution_arn}/*/*"
 }
 
-# /health endpoint, no API key required for monitoring
 resource "aws_api_gateway_resource" "health" {
   rest_api_id = aws_api_gateway_rest_api.runbook.id
   parent_id   = aws_api_gateway_rest_api.runbook.root_resource_id
@@ -94,8 +94,6 @@ resource "aws_cloudwatch_log_group" "api_gw" {
   retention_in_days = 14
 }
 
-# Deployment trigger includes the health endpoint resources too, without
-
 resource "aws_api_gateway_deployment" "main" {
   rest_api_id = aws_api_gateway_rest_api.runbook.id
   triggers = {
@@ -130,9 +128,6 @@ resource "aws_api_gateway_stage" "dev" {
   }
 }
 
-# Method settings (logging, metrics, throttling) live in their own
-# resource rather than an inline block inside aws_api_gateway_stage.
-# This is the current recommended approach with the AWS provider.
 resource "aws_api_gateway_method_settings" "all" {
   rest_api_id = aws_api_gateway_rest_api.runbook.id
   stage_name  = aws_api_gateway_stage.dev.stage_name

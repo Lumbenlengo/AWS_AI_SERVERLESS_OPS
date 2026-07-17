@@ -15,7 +15,6 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 # Env vars must exist before the modules are imported (they read env at import)
 os.environ.update({
