@@ -6,7 +6,6 @@ resource "aws_api_gateway_rest_api" "runbook" {
 
   endpoint_configuration { types = ["REGIONAL"] }
 
-
   lifecycle {
     create_before_destroy = true
   }
@@ -126,6 +125,8 @@ resource "aws_api_gateway_stage" "dev" {
       responseTime = "$context.responseLatency"
     })
   }
+
+  depends_on = [aws_api_gateway_account.this]
 }
 
 resource "aws_api_gateway_method_settings" "all" {
@@ -179,4 +180,25 @@ resource "aws_secretsmanager_secret" "api_key" {
 resource "aws_secretsmanager_secret_version" "api_key" {
   secret_id     = aws_secretsmanager_secret.api_key.id
   secret_string = aws_api_gateway_api_key.ops.value
+}
+
+resource "aws_iam_role" "api_gateway_cloudwatch" {
+  name = "${var.project_name}-${var.environment}-apigw-cloudwatch-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "apigateway.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "api_gateway_cloudwatch" {
+  role       = aws_iam_role.api_gateway_cloudwatch.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
+}
+
+resource "aws_api_gateway_account" "this" {
+  cloudwatch_role_arn = aws_iam_role.api_gateway_cloudwatch.arn
 }
