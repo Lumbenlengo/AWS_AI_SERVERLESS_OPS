@@ -123,6 +123,10 @@ jobs:
     environment: dev-apply   
     steps:
       - uses: actions/checkout@v4
+      - name: Show OIDC token claims
+        uses: github/actions-oidc-debugger@v1
+        with:
+          audience: sts.amazonaws.com
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
