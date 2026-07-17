@@ -58,7 +58,7 @@ os.environ.update({
     "RUNBOOK_LAMBDA_ARN": "arn:aws:lambda:us-east-1:123:function:runbook",
     "CONSOLE_KEY": "test-console-key",
 })
-console = load_lambda("ops_console")
+console = load_lambda("mission_control")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
