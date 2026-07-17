@@ -53,7 +53,7 @@ resource "aws_cloudwatch_event_target" "alarm_to_step_functions" {
 resource "aws_sqs_queue" "events_dlq" {
   name                      = "${local.prefix}-events-dlq"
   message_retention_seconds = 1209600 # 14 days
-  sqs_managed_sse_enabled   = true    
+  sqs_managed_sse_enabled   = true
 }
 
 
