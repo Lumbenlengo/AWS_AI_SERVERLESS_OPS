@@ -30,7 +30,7 @@ data "aws_caller_identity" "current" {}
 
 resource "aws_sns_topic" "alerts" {
   name              = "${var.project_name}-${var.environment}-alerts"
-  kms_master_key_id = "alias/aws/sns" # fixes CKV_AWS_26, was unencrypted
+  kms_master_key_id = "alias/aws/sns" 
 }
 
 resource "aws_sns_topic_subscription" "email" {
@@ -156,7 +156,7 @@ module "api_gateway" {
 
 # MODULE: DEMO APP
 
-module "demo_app" {
+module "ecs_app" {
   count        = var.demo_app_enabled ? 1 : 0
   source       = "../../modules/ecs_app"
   project_name = var.project_name

@@ -93,6 +93,8 @@ resource "aws_cloudwatch_log_group" "api_gw" {
   retention_in_days = 14
 }
 
+
+
 resource "aws_api_gateway_deployment" "main" {
   rest_api_id = aws_api_gateway_rest_api.runbook.id
   triggers = {

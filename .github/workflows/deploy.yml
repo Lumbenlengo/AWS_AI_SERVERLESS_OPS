@@ -8,13 +8,16 @@ on:
   pull_request:
 
 permissions:
-  id-token: write  
+  id-token: write
   contents: read
   pull-requests: write
 
 env:
   TF_DIR: terraform/environments/dev
   AWS_REGION: us-east-1
+  ECR_REPO: ai-ops-serverless-dev-demo-app
+  ECS_CLUSTER: ai-ops-serverless-dev-demo
+  ECS_SERVICE: ai-ops-serverless-dev-demo-app
 
 jobs:
   python-tests:
@@ -131,7 +134,7 @@ jobs:
     if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') && github.event_name == 'push'
     needs: [python-tests, terraform-quality, security-scan]
     runs-on: ubuntu-latest
-    environment: dev-apply   
+    environment: dev-apply
     steps:
       - uses: actions/checkout@v4
       - name: Show OIDC token claims
@@ -162,3 +165,45 @@ jobs:
         run: |
           terraform init
           terraform apply -auto-approve -input=false
+
+  # NEW: builds the demo app Docker image and pushes it to ECR,
+ 
+  build-demo-app:
+    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') && github.event_name == 'push'
+    needs: [apply]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-skip-session-tagging: true
+      - name: Login to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      - name: Build, tag and push demo app image
+        working-directory: app
+        run: |
+          IMAGE_URI="${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPO }}"
+          docker build -t "$IMAGE_URI:${{ github.sha }}" -t "$IMAGE_URI:latest" .
+          docker push "$IMAGE_URI:${{ github.sha }}"
+          docker push "$IMAGE_URI:latest"
+      - name: Force new ECS deployment
+        run: |
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service ${{ env.ECS_SERVICE }} \
+            --force-new-deployment \
+            --region ${{ env.AWS_REGION }}
+      - name: Wait for service to stabilise
+        run: |
+          aws ecs wait services-stable \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services ${{ env.ECS_SERVICE }} \
+            --region ${{ env.AWS_REGION }}
+          aws ecs describe-services \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services ${{ env.ECS_SERVICE }} \
+            --query 'services[0].{running:runningCount,desired:desiredCount,lastEvent:events[0].message}' \
+            --region ${{ env.AWS_REGION }}
