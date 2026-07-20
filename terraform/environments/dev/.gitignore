@@ -1,0 +1,6 @@
+
+# Terraform temporary files
+terraform/**/*plan.txt
+terraform/**/*tfplan
+terraform/**/builds/
+*.tfstate*
