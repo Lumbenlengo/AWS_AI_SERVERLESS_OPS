@@ -96,7 +96,7 @@ module "lambda" {
 
   remediation_map = var.demo_app_enabled ? {
     "${var.project_name}-${var.environment}-watch-demo-app-errors" = {
-      resource        = "${module.demo_app[0].cluster_name}/${module.demo_app[0].service_name}"
+      resource        = "${module.ecs_app[0].cluster_name}/${module.ecs_app[0].service_name}"
       allowed_actions = ["restart_ecs_service", "log_only"]
     }
   } : {}
