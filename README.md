@@ -32,45 +32,6 @@ what to change on its own, and nothing runs without someone approving it first.
 | **Runbook Format** | Markdown + RAG retrieval |
 
 ---
-CloudWatch Anomaly Detection
-         │
-         ▼
-    EventBridge ──────────────────────────────────────────┐
-         │                                                │
-         ▼                                                ▼
-  Lambda: Anomaly Analyser                    EventBridge Schedule
-         │                                    (daily 8am UTC)
-         │ boto3 → Bedrock Claude                         │
-         │                                                ▼
-         ▼                                    Lambda: Cost Reporter
-  Step Functions Workflow                              │
-         │                                             ▼
-    ┌────┴────┐                              Cost Explorer API
-    │AI Analyse│                                        │
-    └────┬────┘                                         ▼
-         │                                    Bedrock Claude
-    ┌────▼────┐                              (explain cost trend)
-    │Notify + │  ← Slack message with                   │
-    │  WAIT   │    Approve/Reject commands               ▼
-    └────┬────┘                                      SNS/Slack
-         │
-    Human clicks Approve
-         │
-    ┌────▼────┐
-    │Remediate│ ← ECS restart / ASG scale
-    └─────────┘
-
-  API Gateway (POST /ask)
-         │
-         ▼
-  Lambda: Runbook Assistant
-         │
-         ▼
-  S3 Runbooks → Bedrock Claude
-  (RAG pattern — answers from your docs)
-  
-  
-  <img width="1331" height="663" alt="diagram-export-22-07-2026-02_02_29" src="https://github.com/user-attachments/assets/418bd1ca-33dd-46c3-b789-5875d61a766c" />
 
 ## Key Features
 
@@ -120,13 +81,12 @@ CloudWatch Alarm
 
 ## Full Architecture Diagram
 
-![Architecture diagram showing all AWS services and data flow](docs/diagrams/architecture.png)
+<img width="1331" height="663" alt="diagram AI OPS PLATFORM" src="https://github.com/user-attachments/assets/25845f32-c4a8-4bac-8bd8-bc01264cd50f" />
 
 ---
 
 ## Incident Response Pipeline
-
-![Incident response stages: detect, analyse, approve, remediate](docs/diagrams/pipeline.png)
+<img width="3000" height="1688" alt="Incident Response Pipeline" src="https://github.com/user-attachments/assets/889318ed-0cea-4dc5-8821-fd9f310c58df" />
 
 **Example timeline for a typical incident:**
 - Detect: ~60 seconds (CloudWatch → EventBridge → Step Functions)
@@ -140,8 +100,7 @@ CloudWatch Alarm
 ---
 
 ## Safety: Six Safeguards Between AI and Your Infrastructure
-
-![Six layers of safety: deterministic targets, action allowlist, re-validation, human gate, IAM, audit trail](docs/diagrams/safeguards.png)
+<img width="3000" height="1688" alt="Safety Six Safeguards Between AI and Your Infrastructure" src="https://github.com/user-attachments/assets/c5f3d66e-14e9-45aa-aab9-f5ab0c9dbcd8" />
 
 The core guarantee: **the AI never holds the keys**. It can only suggest actions
 from a short pre-approved list, and the actual target always comes from a
@@ -175,6 +134,8 @@ Step Functions solves this:
 - Built for long-running workflows with human gates
 
 ---
+
+<img width="3000" height="1688" alt="Engineering Challenges Solved" src="https://github.com/user-attachments/assets/c25993ab-72e3-4a8f-b555-d34a4b375e33" />
 
 ## Engineering Challenges Solved
 
@@ -397,3 +358,5 @@ Cloud Engineer | AWS | Infrastructure as Code
 *This project demonstrates production incident-response patterns: event-driven architecture,
 safe AI integration, Infrastructure as Code, and human governance. Everything is version-controlled,
 tested, and deployed via CI/CD.*
+<img width="1331" height="663" alt="diagram AI OPS PLATFORM" src="https://github.com/user-attachments/assets/25845f32-c4a8-4bac-8bd8-bc01264cd50f" />
+
