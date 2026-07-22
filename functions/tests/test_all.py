@@ -1,10 +1,10 @@
 # functions/tests/test_all.py
 #
-# FIXED vs previous version: all four Lambdas have a module named `main`, and
-# the old suite did sys.path.insert + `import main` for each — but Python
-# caches modules, so every test after the first was silently testing the
-# anomaly analyser. Now each main.py is loaded under a unique module name
-# with importlib, so the suite tests what it claims to test.
+# FIXED: All anomaly_analyser tests now mock call_claude (not call_bedrock)
+# because the deployed code uses Anthropic API Direct, not Bedrock.
+#
+# The suite loads each Lambda's main.py under a unique module name with
+# importlib, ensuring Python doesn't cache modules across test classes.
 #
 # No real AWS calls, no cost. Run: pytest functions/tests/ -v
 
@@ -90,7 +90,8 @@ def make_alarm_event(alarm_name="test-watch-demo-app-errors"):
 class TestAnomalyAnalyser:
 
     def test_analyse_alarm_returns_structured_dict(self):
-        with patch.object(analyser, "call_bedrock", return_value=GOOD_ANALYSIS), \
+        """✅ FIXED: Using call_claude (Anthropic API) instead of call_bedrock"""
+        with patch.object(analyser, "call_claude", return_value=GOOD_ANALYSIS), \
              patch.object(analyser, "send_slack"), patch.object(analyser, "send_sns"):
             result = analyser.analyse_alarm(make_alarm_event())
 
@@ -100,20 +101,22 @@ class TestAnomalyAnalyser:
         assert "timestamp" in result
 
     def test_resource_comes_from_map_not_model(self):
-        """ADR 004: even if the model names a resource, the map wins."""
+        """ADR 004: even if the model names a resource, the map wins.
+        ✅ FIXED: Using call_claude instead of call_bedrock"""
         model_output = json.dumps({**json.loads(GOOD_ANALYSIS),
                                    "resource": "evil-cluster/evil-service",
                                    "recommended_action": "restart_ecs_service"})
-        with patch.object(analyser, "call_bedrock", return_value=model_output), \
+        with patch.object(analyser, "call_claude", return_value=model_output), \
              patch.object(analyser, "send_slack"), patch.object(analyser, "send_sns"):
             result = analyser.analyse_alarm(make_alarm_event())
 
         assert result["resource"] == "demo-cluster/demo-service"
 
     def test_unknown_alarm_degrades_to_log_only(self):
+        """✅ FIXED: Using call_claude instead of call_bedrock"""
         model_output = json.dumps({**json.loads(GOOD_ANALYSIS),
                                    "recommended_action": "restart_ecs_service"})
-        with patch.object(analyser, "call_bedrock", return_value=model_output), \
+        with patch.object(analyser, "call_claude", return_value=model_output), \
              patch.object(analyser, "send_slack"), patch.object(analyser, "send_sns"):
             result = analyser.analyse_alarm(make_alarm_event("some-unmapped-alarm"))
 
@@ -121,16 +124,18 @@ class TestAnomalyAnalyser:
         assert result["resource"] == ""
 
     def test_disallowed_action_is_forced_to_log_only(self):
+        """✅ FIXED: Using call_claude instead of call_bedrock"""
         model_output = json.dumps({**json.loads(GOOD_ANALYSIS),
                                    "recommended_action": "scale_asg"})  # not allowed for this alarm
-        with patch.object(analyser, "call_bedrock", return_value=model_output), \
+        with patch.object(analyser, "call_claude", return_value=model_output), \
              patch.object(analyser, "send_slack"), patch.object(analyser, "send_sns"):
             result = analyser.analyse_alarm(make_alarm_event())
 
         assert result["recommended_action"] == "log_only"
 
-    def test_handles_malformed_bedrock_json(self):
-        with patch.object(analyser, "call_bedrock", return_value="Sorry, I cannot help."), \
+    def test_handles_malformed_claude_json(self):
+        """✅ FIXED: Using call_claude instead of call_bedrock"""
+        with patch.object(analyser, "call_claude", return_value="Sorry, I cannot help."), \
              patch.object(analyser, "send_slack"), patch.object(analyser, "send_sns"):
             result = analyser.analyse_alarm(make_alarm_event())
 
@@ -138,8 +143,9 @@ class TestAnomalyAnalyser:
         assert result["confidence"] == "LOW"
 
     def test_handles_fenced_json(self):
+        """✅ FIXED: Using call_claude instead of call_bedrock"""
         fenced = f"Here is the analysis:\n```json\n{GOOD_ANALYSIS}\n```"
-        with patch.object(analyser, "call_bedrock", return_value=fenced), \
+        with patch.object(analyser, "call_claude", return_value=fenced), \
              patch.object(analyser, "send_slack"), patch.object(analyser, "send_sns"):
             result = analyser.analyse_alarm(make_alarm_event())
 
@@ -157,7 +163,8 @@ class TestAnomalyAnalyser:
         assert result["alarm_name"] == "test-alarm"
 
     def test_handler_never_raises(self):
-        with patch.object(analyser, "call_bedrock", side_effect=Exception("total failure")), \
+        """✅ FIXED: Using call_claude instead of call_bedrock"""
+        with patch.object(analyser, "call_claude", side_effect=Exception("total failure")), \
              patch.object(analyser, "send_slack"), patch.object(analyser, "send_sns"):
             result = analyser.lambda_handler({"bad": "event"}, {})
         assert isinstance(result, dict)
@@ -295,7 +302,7 @@ class TestRemediator:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# OPS CONSOLE
+# OPS CONSOLE (MISSION CONTROL)
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TestOpsConsole:

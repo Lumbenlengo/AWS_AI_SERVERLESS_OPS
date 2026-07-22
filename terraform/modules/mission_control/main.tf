@@ -44,8 +44,8 @@ resource "aws_secretsmanager_secret_version" "console_key" {
 
 data "archive_file" "src" {
   type        = "zip"
-  source_dir  = "${var.functions_path}/ops_console"
-  output_path = "${path.module}/builds/ops_console.zip"
+  source_dir  = "${var.functions_path}/mission_control"
+  output_path = "${path.module}/builds/mission_control.zip"
 }
 
 resource "aws_cloudwatch_log_group" "console" {

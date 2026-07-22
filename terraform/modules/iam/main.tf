@@ -1,6 +1,6 @@
 # terraform/modules/iam/main.tf
 #
-# REAL least privilege — one role per Lambda function.
+# REAL least privilege  one role per Lambda function.
 # The previous version shared one role across all 4 Lambdas, which meant the
 # public-facing runbook assistant could restart ECS services. Fixed:
 #

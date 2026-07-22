@@ -1,0 +1,468 @@
+[0m[1mmodule.mission_control.random_password.console_key: Refreshing state... [id=none][0m
+[0m[1mmodule.mission_control.data.archive_file.src: Reading...[0m[0m
+[0m[1mmodule.mission_control.data.archive_file.src: Read complete after 0s [id=087380ec6aa649668497c41b56763aa0f79e00ee][0m
+[0m[1mmodule.ecs_app[0].data.aws_iam_policy_document.ecs_assume: Reading...[0m[0m
+[0m[1mdata.aws_caller_identity.current: Reading...[0m[0m
+[0m[1mmodule.iam.data.aws_caller_identity.current: Reading...[0m[0m
+[0m[1mmodule.iam.aws_iam_openid_connect_provider.github: Refreshing state... [id=arn:aws:iam::979054355604:oidc-provider/token.actions.githubusercontent.com][0m
+[0m[1mmodule.iam.aws_iam_role.eventbridge_sfn: Refreshing state... [id=ai-ops-serverless-dev-eventbridge-sfn-role][0m
+[0m[1mmodule.ecs_app[0].aws_cloudwatch_metric_alarm.app_errors: Refreshing state... [id=ai-ops-serverless-dev-watch-demo-app-errors][0m
+[0m[1mmodule.mission_control.aws_cloudwatch_log_group.console: Refreshing state... [id=/aws/lambda/ai-ops-serverless-dev-ops-console][0m
+[0m[1mmodule.api_gateway.aws_api_gateway_rest_api.runbook: Refreshing state... [id=6hfsut7k4c][0m
+[0m[1mmodule.eventbridge.aws_sqs_queue.events_dlq: Refreshing state... [id=https://sqs.us-east-1.amazonaws.com/979054355604/ai-ops-serverless-dev-events-dlq][0m
+[0m[1mmodule.api_gateway.aws_iam_role.api_gateway_cloudwatch: Refreshing state... [id=ai-ops-serverless-dev-apigw-cloudwatch-role][0m
+[0m[1mmodule.ecs_app[0].data.aws_iam_policy_document.ecs_assume: Read complete after 0s [id=1077804475][0m
+[0m[1mmodule.ecs_app[0].aws_ecs_cluster.demo: Refreshing state... [id=arn:aws:ecs:us-east-1:979054355604:cluster/ai-ops-serverless-dev-demo][0m
+[0m[1mmodule.iam.data.aws_caller_identity.current: Read complete after 0s [id=979054355604][0m
+[0m[1mmodule.api_gateway.aws_api_gateway_api_key.ops: Refreshing state... [id=a39rxqoauj][0m
+[0m[1mdata.aws_caller_identity.current: Read complete after 0s [id=979054355604][0m
+[0m[1mmodule.mission_control.aws_iam_role.console: Refreshing state... [id=ai-ops-serverless-dev-ops-console-role][0m
+[0m[1mmodule.mission_control.data.aws_caller_identity.current: Reading...[0m[0m
+[0m[1maws_sns_topic.alerts: Refreshing state... [id=arn:aws:sns:us-east-1:979054355604:ai-ops-serverless-dev-alerts][0m
+[0m[1mmodule.api_gateway.aws_cloudwatch_log_group.api_gw: Refreshing state... [id=/aws/apigateway/ai-ops-serverless-dev][0m
+[0m[1mmodule.mission_control.data.aws_caller_identity.current: Read complete after 0s [id=979054355604][0m
+[0m[1mmodule.mission_control.aws_secretsmanager_secret.console_key: Refreshing state... [id=arn:aws:secretsmanager:us-east-1:979054355604:secret:ai-ops-serverless/dev/ops-console/key-0LE9Q1][0m
+[0m[1mmodule.eventbridge.aws_cloudwatch_event_rule.daily_cost_report: Refreshing state... [id=ai-ops-serverless-dev-daily-cost-report][0m
+[0m[1mmodule.eventbridge.aws_cloudwatch_event_rule.watch_alarm_to_workflow: Refreshing state... [id=ai-ops-serverless-dev-watch-alarm-trigger][0m
+[0m[1mmodule.step_functions.aws_cloudwatch_log_group.sfn: Refreshing state... [id=/aws/states/ai-ops-serverless-dev-ai-ops][0m
+[0m[1mmodule.ecs_app[0].data.aws_vpc.default: Reading...[0m[0m
+[0m[1mmodule.iam.data.aws_iam_policy_document.lambda_assume: Reading...[0m[0m
+[0m[1mmodule.iam.data.aws_iam_policy_document.lambda_assume: Read complete after 0s [id=2690255455][0m
+[0m[1mmodule.iam.aws_iam_role.step_functions: Refreshing state... [id=ai-ops-serverless-dev-sfn-role][0m
+[0m[1mmodule.api_gateway.aws_secretsmanager_secret.api_key: Refreshing state... [id=arn:aws:secretsmanager:us-east-1:979054355604:secret:ai-ops-serverless/dev/api-gateway/ops-key-bDVen1][0m
+[0m[1mmodule.iam.aws_iam_role.github_actions: Refreshing state... [id=ai-ops-serverless-dev-github-actions-role][0m
+[0m[1maws_s3_bucket.runbooks: Refreshing state... [id=ai-ops-serverless-dev-runbooks-979054355604][0m
+[0m[1mmodule.api_gateway.aws_api_gateway_resource.health: Refreshing state... [id=li71us][0m
+[0m[1mmodule.api_gateway.aws_api_gateway_resource.ask: Refreshing state... [id=xzgzc3][0m
+[0m[1mmodule.api_gateway.aws_iam_role_policy_attachment.api_gateway_cloudwatch: Refreshing state... [id=ai-ops-serverless-dev-apigw-cloudwatch-role-20260717145536970600000001][0m
+[0m[1mmodule.api_gateway.aws_api_gateway_account.this: Refreshing state... [id=api-gateway-account][0m
+[0m[1mmodule.mission_control.aws_iam_role_policy_attachment.console_logs: Refreshing state... [id=ai-ops-serverless-dev-ops-console-role-20260717125422382900000005][0m
+[0m[1mmodule.iam.aws_iam_role_policy.eventbridge_sfn: Refreshing state... [id=ai-ops-serverless-dev-eventbridge-sfn-role:start-step-functions][0m
+[0m[1maws_sns_topic_subscription.email: Refreshing state... [id=arn:aws:sns:us-east-1:979054355604:ai-ops-serverless-dev-alerts:eb95f141-53f2-4271-82a0-6bce9161b034][0m
+[0m[1mmodule.iam.aws_iam_role.cost_reporter: Refreshing state... [id=ai-ops-serverless-dev-cost-reporter-role][0m
+[0m[1mmodule.iam.aws_iam_role.remediator: Refreshing state... [id=ai-ops-serverless-dev-remediator-role][0m
+[0m[1mmodule.iam.aws_iam_role.analyser: Refreshing state... [id=ai-ops-serverless-dev-analyser-role][0m
+[0m[1mmodule.ecs_app[0].data.aws_vpc.default: Read complete after 1s [id=vpc-02a7c96963c82aa60][0m
+[0m[1mmodule.iam.aws_iam_role.runbook: Refreshing state... [id=ai-ops-serverless-dev-runbook-role][0m
+[0m[1mmodule.mission_control.aws_secretsmanager_secret_version.console_key: Refreshing state... [id=arn:aws:secretsmanager:us-east-1:979054355604:secret:ai-ops-serverless/dev/ops-console/key-0LE9Q1|terraform-20260717125422250300000004][0m
+[0m[1mmodule.iam.data.aws_iam_policy_document.logs_and_xray: Reading...[0m[0m
+[0m[1mmodule.iam.data.aws_iam_policy_document.logs_and_xray: Read complete after 0s [id=1836022158][0m
+[0m[1mmodule.api_gateway.aws_secretsmanager_secret_version.api_key: Refreshing state... [id=arn:aws:secretsmanager:us-east-1:979054355604:secret:ai-ops-serverless/dev/api-gateway/ops-key-bDVen1|terraform-20260717125422225200000003][0m
+[0m[1mmodule.iam.aws_iam_role_policy.step_functions: Refreshing state... [id=ai-ops-serverless-dev-sfn-role:sfn-permissions][0m
+[0m[1mmodule.api_gateway.aws_api_gateway_method.get_health: Refreshing state... [id=agm-6hfsut7k4c-li71us-GET][0m
+[0m[1mmodule.api_gateway.aws_api_gateway_method.post_ask: Refreshing state... [id=agm-6hfsut7k4c-xzgzc3-POST][0m
+[0m[1mmodule.iam.aws_iam_role_policy.github_actions: Refreshing state... [id=ai-ops-serverless-dev-github-actions-role:terraform-deploy][0m
+[0m[1mmodule.monitoring.aws_cloudwatch_metric_alarm.lambda_errors["runbook-assistant"]: Refreshing state... [id=ai-ops-serverless-dev-selfmon-runbook-assistant-errors][0m
+[0m[1mmodule.monitoring.aws_cloudwatch_metric_alarm.lambda_errors["cost-reporter"]: Refreshing state... [id=ai-ops-serverless-dev-selfmon-cost-reporter-errors][0m
+[0m[1mmodule.monitoring.aws_cloudwatch_metric_alarm.lambda_errors["anomaly-analyser"]: Refreshing state... [id=ai-ops-serverless-dev-selfmon-anomaly-analyser-errors][0m
+[0m[1mmodule.monitoring.aws_cloudwatch_metric_alarm.lambda_errors["remediator"]: Refreshing state... [id=ai-ops-serverless-dev-selfmon-remediator-errors][0m
+[0m[1mmodule.ecs_app[0].data.aws_subnets.default: Reading...[0m[0m
+[0m[1mmodule.ecs_app[0].data.aws_subnets.default: Read complete after 0s [id=us-east-1][0m
+[0m[1mmodule.iam.aws_iam_role_policy.cost_reporter: Refreshing state... [id=ai-ops-serverless-dev-cost-reporter-role:cost-reporter-permissions][0m
+[0m[1mmodule.iam.aws_iam_role_policy.analyser: Refreshing state... [id=ai-ops-serverless-dev-analyser-role:analyser-permissions][0m
+[0m[1mmodule.iam.aws_iam_role_policy.remediator: Refreshing state... [id=ai-ops-serverless-dev-remediator-role:remediator-permissions][0m
+[0m[1mmodule.iam.aws_iam_policy.logs_and_xray: Refreshing state... [id=arn:aws:iam::979054355604:policy/ai-ops-serverless-dev-lambda-logs-xray][0m
+[0m[1mmodule.api_gateway.aws_api_gateway_method_response.health_ok: Refreshing state... [id=agmr-6hfsut7k4c-li71us-GET-200][0m
+[0m[1mmodule.api_gateway.aws_api_gateway_integration.health_mock: Refreshing state... [id=agi-6hfsut7k4c-li71us-GET][0m
+[0m[1mmodule.api_gateway.aws_api_gateway_method_response.ok: Refreshing state... [id=agmr-6hfsut7k4c-xzgzc3-POST-200][0m
+[0m[1maws_s3_bucket_server_side_encryption_configuration.runbooks: Refreshing state... [id=ai-ops-serverless-dev-runbooks-979054355604][0m
+[0m[1maws_s3_bucket_versioning.runbooks: Refreshing state... [id=ai-ops-serverless-dev-runbooks-979054355604][0m
+[0m[1maws_s3_bucket_public_access_block.runbooks: Refreshing state... [id=ai-ops-serverless-dev-runbooks-979054355604][0m
+[0m[1mmodule.iam.aws_iam_role_policy_attachment.runbook_base: Refreshing state... [id=ai-ops-serverless-dev-runbook-role-20260717125423192000000006][0m
+[0m[1mmodule.iam.aws_iam_role_policy_attachment.analyser_base: Refreshing state... [id=ai-ops-serverless-dev-analyser-role-20260717125423214800000008][0m
+[0m[1mmodule.iam.aws_iam_role_policy_attachment.cost_reporter_base: Refreshing state... [id=ai-ops-serverless-dev-cost-reporter-role-20260717125423407500000009][0m
+[0m[1mmodule.iam.aws_iam_role_policy_attachment.remediator_base: Refreshing state... [id=ai-ops-serverless-dev-remediator-role-20260717125423209000000007][0m
+[0m[1mmodule.api_gateway.aws_api_gateway_integration_response.health_ok: Refreshing state... [id=agir-6hfsut7k4c-li71us-GET-200][0m
+[0m[1mmodule.iam.aws_iam_role_policy.runbook: Refreshing state... [id=ai-ops-serverless-dev-runbook-role:runbook-permissions][0m
+[0m[1mmodule.lambda.data.archive_file.src["remediator"]: Reading...[0m[0m
+[0m[1mmodule.lambda.data.archive_file.src["runbook_assistant"]: Reading...[0m[0m
+[0m[1mmodule.lambda.data.archive_file.src["anomaly_analyser"]: Reading...[0m[0m
+[0m[1mmodule.lambda.data.archive_file.src["remediator"]: Read complete after 0s [id=dc2758b1eb59d123fc41231ba584e85340ff6dab][0m
+[0m[1mmodule.lambda.data.archive_file.src["runbook_assistant"]: Read complete after 0s [id=db1a014d6d3af0532781262a1cefa5f53cf3e494][0m
+[0m[1mmodule.lambda.aws_cloudwatch_log_group.fn["cost_reporter"]: Refreshing state... [id=/aws/lambda/ai-ops-serverless-dev-cost-reporter][0m
+[0m[1mmodule.lambda.data.archive_file.src["cost_reporter"]: Reading...[0m[0m
+[0m[1mmodule.lambda.data.archive_file.src["anomaly_analyser"]: Read complete after 0s [id=1319b8804e968e1a2405909376a4d74045b7c5c8][0m
+[0m[1mmodule.lambda.aws_cloudwatch_log_group.fn["runbook_assistant"]: Refreshing state... [id=/aws/lambda/ai-ops-serverless-dev-runbook-assistant][0m
+[0m[1mmodule.lambda.data.archive_file.src["cost_reporter"]: Read complete after 0s [id=c565c8e075b4b015e1e22e4339969f7ee344dc68][0m
+[0m[1mmodule.lambda.aws_cloudwatch_log_group.fn["anomaly_analyser"]: Refreshing state... [id=/aws/lambda/ai-ops-serverless-dev-anomaly-analyser][0m
+[0m[1mmodule.lambda.aws_cloudwatch_log_group.fn["remediator"]: Refreshing state... [id=/aws/lambda/ai-ops-serverless-dev-remediator][0m
+[0m[1mmodule.eventbridge.aws_sqs_queue_policy.events_dlq: Refreshing state... [id=https://sqs.us-east-1.amazonaws.com/979054355604/ai-ops-serverless-dev-events-dlq][0m
+[0m[1mmodule.lambda.aws_lambda_function.fn["runbook_assistant"]: Refreshing state... [id=ai-ops-serverless-dev-runbook-assistant][0m
+[0m[1mmodule.lambda.aws_lambda_function.fn["remediator"]: Refreshing state... [id=ai-ops-serverless-dev-remediator][0m
+[0m[1mmodule.lambda.aws_lambda_function.fn["cost_reporter"]: Refreshing state... [id=ai-ops-serverless-dev-cost-reporter][0m
+[0m[1mmodule.lambda.aws_lambda_function.fn["anomaly_analyser"]: Refreshing state... [id=ai-ops-serverless-dev-anomaly-analyser][0m
+[0m[1mmodule.api_gateway.aws_api_gateway_integration.lambda: Refreshing state... [id=agi-6hfsut7k4c-xzgzc3-POST][0m
+[0m[1mmodule.api_gateway.aws_lambda_permission.allow_api_gateway: Refreshing state... [id=AllowAPIGatewayInvoke][0m
+[0m[1mmodule.eventbridge.aws_cloudwatch_event_target.cost_reporter: Refreshing state... [id=ai-ops-serverless-dev-daily-cost-report-TriggerCostReporter][0m
+[0m[1mmodule.eventbridge.aws_lambda_permission.eventbridge_cost: Refreshing state... [id=AllowEventBridgeDailyCost][0m
+[0m[1mmodule.step_functions.aws_sfn_state_machine.ai_ops: Refreshing state... [id=arn:aws:states:us-east-1:979054355604:stateMachine:ai-ops-serverless-dev-ai-ops-workflow][0m
+[0m[1mmodule.api_gateway.aws_api_gateway_deployment.main: Refreshing state... [id=3octwx][0m
+[0m[1mmodule.api_gateway.aws_api_gateway_stage.dev: Refreshing state... [id=ags-6hfsut7k4c-dev][0m
+[0m[1mmodule.api_gateway.aws_api_gateway_method_settings.all: Refreshing state... [id=6hfsut7k4c-dev-*/*][0m
+[0m[1mmodule.api_gateway.aws_api_gateway_usage_plan.ops: Refreshing state... [id=vo2b44][0m
+[0m[1mmodule.api_gateway.aws_api_gateway_usage_plan_key.ops: Refreshing state... [id=a39rxqoauj][0m
+[0m[1mmodule.mission_control.aws_iam_role_policy.console: Refreshing state... [id=ai-ops-serverless-dev-ops-console-role:ops-console-permissions][0m
+[0m[1mmodule.monitoring.aws_cloudwatch_dashboard.ai_ops: Refreshing state... [id=ai-ops-serverless-dev-ai-ops][0m
+[0m[1mmodule.eventbridge.aws_cloudwatch_event_target.alarm_to_step_functions: Refreshing state... [id=ai-ops-serverless-dev-watch-alarm-trigger-StartAIOpsWorkflow][0m
+[0m[1mmodule.monitoring.aws_cloudwatch_metric_alarm.sfn_failures: Refreshing state... [id=ai-ops-serverless-dev-selfmon-sfn-execution-failed][0m
+[0m[1mmodule.mission_control.aws_lambda_function.console: Refreshing state... [id=ai-ops-serverless-dev-ops-console][0m
+[0m[1mmodule.mission_control.aws_lambda_function_url.console: Refreshing state... [id=ai-ops-serverless-dev-ops-console][0m
+
+[1m[36mNote:[0m[1m Objects have changed outside of Terraform
+[0m
+Terraform detected the following changes made outside of Terraform since the
+last "terraform apply" which may have affected this plan:
+
+[1m  # module.ecs_app[0].aws_cloudwatch_metric_alarm.app_errors[0m has been deleted
+[0m  [31m-[0m[0m resource "aws_cloudwatch_metric_alarm" "app_errors" {
+      [31m-[0m[0m alarm_name          = "ai-ops-serverless-dev-watch-demo-app-errors" [90m-> null[0m[0m
+        id                  = "ai-ops-serverless-dev-watch-demo-app-errors"
+        [90m# (12 unchanged attributes hidden)[0m[0m
+    }
+
+[1m  # module.ecs_app[0].aws_ecs_cluster.demo[0m has been deleted
+[0m  [31m-[0m[0m resource "aws_ecs_cluster" "demo" {
+      [31m-[0m[0m id       = "arn:aws:ecs:us-east-1:979054355604:cluster/ai-ops-serverless-dev-demo" [90m-> null[0m[0m
+      [31m-[0m[0m name     = "ai-ops-serverless-dev-demo" [90m-> null[0m[0m
+        [90m# (2 unchanged attributes hidden)[0m[0m
+
+        [90m# (1 unchanged block hidden)[0m[0m
+    }
+
+
+Unless you have made equivalent changes to your configuration, or ignored the
+relevant attributes using ignore_changes, the following plan may include
+actions to undo or respond to these changes.
+[90m
+─────────────────────────────────────────────────────────────────────────────[0m
+
+Terraform used the selected providers to generate the following execution
+plan. Resource actions are indicated with the following symbols:
+  [32m+[0m create[0m
+
+Terraform will perform the following actions:
+
+[1m  # module.ecs_app[0].aws_cloudwatch_log_group.app[0m will be created
+[0m  [32m+[0m[0m resource "aws_cloudwatch_log_group" "app" {
+      [32m+[0m[0m arn               = (known after apply)
+      [32m+[0m[0m id                = (known after apply)
+      [32m+[0m[0m log_group_class   = (known after apply)
+      [32m+[0m[0m name              = "/ecs/ai-ops-serverless-dev-demo-app"
+      [32m+[0m[0m name_prefix       = (known after apply)
+      [32m+[0m[0m retention_in_days = 7
+      [32m+[0m[0m skip_destroy      = false
+      [32m+[0m[0m tags_all          = {
+          [32m+[0m[0m "Environment" = "dev"
+          [32m+[0m[0m "ManagedBy"   = "Terraform"
+          [32m+[0m[0m "Project"     = "ai-ops-serverless"
+          [32m+[0m[0m "Repository"  = "github.com/Lumbenlengo/AWS_AI_SERVERLESS_OPS"
+        }
+    }
+
+[1m  # module.ecs_app[0].aws_cloudwatch_metric_alarm.app_errors[0m will be created
+[0m  [32m+[0m[0m resource "aws_cloudwatch_metric_alarm" "app_errors" {
+      [32m+[0m[0m actions_enabled                       = true
+      [32m+[0m[0m alarm_description                     = "Orders API error rate is high — AI Ops workflow will analyse and propose remediation"
+      [32m+[0m[0m alarm_name                            = "ai-ops-serverless-dev-watch-demo-app-errors"
+      [32m+[0m[0m arn                                   = (known after apply)
+      [32m+[0m[0m comparison_operator                   = "GreaterThanOrEqualToThreshold"
+      [32m+[0m[0m dimensions                            = {
+          [32m+[0m[0m "Service" = "orders-api"
+        }
+      [32m+[0m[0m evaluate_low_sample_count_percentiles = (known after apply)
+      [32m+[0m[0m evaluation_periods                    = 1
+      [32m+[0m[0m id                                    = (known after apply)
+      [32m+[0m[0m metric_name                           = "Errors"
+      [32m+[0m[0m namespace                             = "DemoApp"
+      [32m+[0m[0m period                                = 60
+      [32m+[0m[0m statistic                             = "Sum"
+      [32m+[0m[0m tags_all                              = {
+          [32m+[0m[0m "Environment" = "dev"
+          [32m+[0m[0m "ManagedBy"   = "Terraform"
+          [32m+[0m[0m "Project"     = "ai-ops-serverless"
+          [32m+[0m[0m "Repository"  = "github.com/Lumbenlengo/AWS_AI_SERVERLESS_OPS"
+        }
+      [32m+[0m[0m threshold                             = 5
+      [32m+[0m[0m treat_missing_data                    = "notBreaching"
+    }
+
+[1m  # module.ecs_app[0].aws_ecr_repository.app[0m will be created
+[0m  [32m+[0m[0m resource "aws_ecr_repository" "app" {
+      [32m+[0m[0m arn                  = (known after apply)
+      [32m+[0m[0m force_delete         = true
+      [32m+[0m[0m id                   = (known after apply)
+      [32m+[0m[0m image_tag_mutability = "MUTABLE"
+      [32m+[0m[0m name                 = "ai-ops-serverless-dev-demo-app"
+      [32m+[0m[0m registry_id          = (known after apply)
+      [32m+[0m[0m repository_url       = (known after apply)
+      [32m+[0m[0m tags_all             = {
+          [32m+[0m[0m "Environment" = "dev"
+          [32m+[0m[0m "ManagedBy"   = "Terraform"
+          [32m+[0m[0m "Project"     = "ai-ops-serverless"
+          [32m+[0m[0m "Repository"  = "github.com/Lumbenlengo/AWS_AI_SERVERLESS_OPS"
+        }
+
+      [32m+[0m[0m image_scanning_configuration {
+          [32m+[0m[0m scan_on_push = true
+        }
+    }
+
+[1m  # module.ecs_app[0].aws_ecs_cluster.demo[0m will be created
+[0m  [32m+[0m[0m resource "aws_ecs_cluster" "demo" {
+      [32m+[0m[0m arn      = (known after apply)
+      [32m+[0m[0m id       = (known after apply)
+      [32m+[0m[0m name     = "ai-ops-serverless-dev-demo"
+      [32m+[0m[0m tags_all = {
+          [32m+[0m[0m "Environment" = "dev"
+          [32m+[0m[0m "ManagedBy"   = "Terraform"
+          [32m+[0m[0m "Project"     = "ai-ops-serverless"
+          [32m+[0m[0m "Repository"  = "github.com/Lumbenlengo/AWS_AI_SERVERLESS_OPS"
+        }
+
+      [32m+[0m[0m setting {
+          [32m+[0m[0m name  = "containerInsights"
+          [32m+[0m[0m value = "enabled"
+        }
+    }
+
+[1m  # module.ecs_app[0].aws_ecs_service.app[0m will be created
+[0m  [32m+[0m[0m resource "aws_ecs_service" "app" {
+      [32m+[0m[0m availability_zone_rebalancing      = "DISABLED"
+      [32m+[0m[0m cluster                            = (known after apply)
+      [32m+[0m[0m deployment_maximum_percent         = 200
+      [32m+[0m[0m deployment_minimum_healthy_percent = 100
+      [32m+[0m[0m desired_count                      = 1
+      [32m+[0m[0m enable_ecs_managed_tags            = false
+      [32m+[0m[0m enable_execute_command             = false
+      [32m+[0m[0m iam_role                           = (known after apply)
+      [32m+[0m[0m id                                 = (known after apply)
+      [32m+[0m[0m launch_type                        = (known after apply)
+      [32m+[0m[0m name                               = "ai-ops-serverless-dev-demo-app"
+      [32m+[0m[0m platform_version                   = (known after apply)
+      [32m+[0m[0m scheduling_strategy                = "REPLICA"
+      [32m+[0m[0m tags                               = {
+          [32m+[0m[0m "AIOpsManaged" = "true"
+        }
+      [32m+[0m[0m tags_all                           = {
+          [32m+[0m[0m "AIOpsManaged" = "true"
+          [32m+[0m[0m "Environment"  = "dev"
+          [32m+[0m[0m "ManagedBy"    = "Terraform"
+          [32m+[0m[0m "Project"      = "ai-ops-serverless"
+          [32m+[0m[0m "Repository"   = "github.com/Lumbenlengo/AWS_AI_SERVERLESS_OPS"
+        }
+      [32m+[0m[0m task_definition                    = (known after apply)
+      [32m+[0m[0m triggers                           = (known after apply)
+      [32m+[0m[0m wait_for_steady_state              = false
+
+      [32m+[0m[0m capacity_provider_strategy {
+          [32m+[0m[0m capacity_provider = "FARGATE_SPOT"
+          [32m+[0m[0m weight            = 1
+        }
+
+      [32m+[0m[0m network_configuration {
+          [32m+[0m[0m assign_public_ip = true
+          [32m+[0m[0m security_groups  = (known after apply)
+          [32m+[0m[0m subnets          = [
+              [32m+[0m[0m "subnet-0159a8f818c537618",
+              [32m+[0m[0m "subnet-0482f42fe2b3bd3f7",
+              [32m+[0m[0m "subnet-06d40d0dc82aab1b2",
+              [32m+[0m[0m "subnet-0cfe441116e21beb0",
+              [32m+[0m[0m "subnet-0d41d0616bf788ed3",
+              [32m+[0m[0m "subnet-0ea87056c7a46b0a4",
+            ]
+        }
+    }
+
+[1m  # module.ecs_app[0].aws_ecs_task_definition.app[0m will be created
+[0m  [32m+[0m[0m resource "aws_ecs_task_definition" "app" {
+      [32m+[0m[0m arn                      = (known after apply)
+      [32m+[0m[0m arn_without_revision     = (known after apply)
+      [32m+[0m[0m container_definitions    = (known after apply)
+      [32m+[0m[0m cpu                      = "256"
+      [32m+[0m[0m enable_fault_injection   = (known after apply)
+      [32m+[0m[0m execution_role_arn       = (known after apply)
+      [32m+[0m[0m family                   = "ai-ops-serverless-dev-demo-app"
+      [32m+[0m[0m id                       = (known after apply)
+      [32m+[0m[0m memory                   = "512"
+      [32m+[0m[0m network_mode             = "awsvpc"
+      [32m+[0m[0m requires_compatibilities = [
+          [32m+[0m[0m "FARGATE",
+        ]
+      [32m+[0m[0m revision                 = (known after apply)
+      [32m+[0m[0m skip_destroy             = false
+      [32m+[0m[0m tags_all                 = {
+          [32m+[0m[0m "Environment" = "dev"
+          [32m+[0m[0m "ManagedBy"   = "Terraform"
+          [32m+[0m[0m "Project"     = "ai-ops-serverless"
+          [32m+[0m[0m "Repository"  = "github.com/Lumbenlengo/AWS_AI_SERVERLESS_OPS"
+        }
+      [32m+[0m[0m task_role_arn            = (known after apply)
+      [32m+[0m[0m track_latest             = false
+    }
+
+[1m  # module.ecs_app[0].aws_iam_role.execution[0m will be created
+[0m  [32m+[0m[0m resource "aws_iam_role" "execution" {
+      [32m+[0m[0m arn                   = (known after apply)
+      [32m+[0m[0m assume_role_policy    = jsonencode(
+            {
+              [32m+[0m[0m Statement = [
+                  [32m+[0m[0m {
+                      [32m+[0m[0m Action    = "sts:AssumeRole"
+                      [32m+[0m[0m Effect    = "Allow"
+                      [32m+[0m[0m Principal = {
+                          [32m+[0m[0m Service = "ecs-tasks.amazonaws.com"
+                        }
+                    },
+                ]
+              [32m+[0m[0m Version   = "2012-10-17"
+            }
+        )
+      [32m+[0m[0m create_date           = (known after apply)
+      [32m+[0m[0m force_detach_policies = false
+      [32m+[0m[0m id                    = (known after apply)
+      [32m+[0m[0m managed_policy_arns   = (known after apply)
+      [32m+[0m[0m max_session_duration  = 3600
+      [32m+[0m[0m name                  = "ai-ops-serverless-dev-demo-app-execution-role"
+      [32m+[0m[0m name_prefix           = (known after apply)
+      [32m+[0m[0m path                  = "/"
+      [32m+[0m[0m tags_all              = {
+          [32m+[0m[0m "Environment" = "dev"
+          [32m+[0m[0m "ManagedBy"   = "Terraform"
+          [32m+[0m[0m "Project"     = "ai-ops-serverless"
+          [32m+[0m[0m "Repository"  = "github.com/Lumbenlengo/AWS_AI_SERVERLESS_OPS"
+        }
+      [32m+[0m[0m unique_id             = (known after apply)
+
+      [32m+[0m[0m inline_policy (known after apply)
+    }
+
+[1m  # module.ecs_app[0].aws_iam_role.task[0m will be created
+[0m  [32m+[0m[0m resource "aws_iam_role" "task" {
+      [32m+[0m[0m arn                   = (known after apply)
+      [32m+[0m[0m assume_role_policy    = jsonencode(
+            {
+              [32m+[0m[0m Statement = [
+                  [32m+[0m[0m {
+                      [32m+[0m[0m Action    = "sts:AssumeRole"
+                      [32m+[0m[0m Effect    = "Allow"
+                      [32m+[0m[0m Principal = {
+                          [32m+[0m[0m Service = "ecs-tasks.amazonaws.com"
+                        }
+                    },
+                ]
+              [32m+[0m[0m Version   = "2012-10-17"
+            }
+        )
+      [32m+[0m[0m create_date           = (known after apply)
+      [32m+[0m[0m force_detach_policies = false
+      [32m+[0m[0m id                    = (known after apply)
+      [32m+[0m[0m managed_policy_arns   = (known after apply)
+      [32m+[0m[0m max_session_duration  = 3600
+      [32m+[0m[0m name                  = "ai-ops-serverless-dev-demo-app-task-role"
+      [32m+[0m[0m name_prefix           = (known after apply)
+      [32m+[0m[0m path                  = "/"
+      [32m+[0m[0m tags_all              = {
+          [32m+[0m[0m "Environment" = "dev"
+          [32m+[0m[0m "ManagedBy"   = "Terraform"
+          [32m+[0m[0m "Project"     = "ai-ops-serverless"
+          [32m+[0m[0m "Repository"  = "github.com/Lumbenlengo/AWS_AI_SERVERLESS_OPS"
+        }
+      [32m+[0m[0m unique_id             = (known after apply)
+
+      [32m+[0m[0m inline_policy (known after apply)
+    }
+
+[1m  # module.ecs_app[0].aws_iam_role_policy.task[0m will be created
+[0m  [32m+[0m[0m resource "aws_iam_role_policy" "task" {
+      [32m+[0m[0m id          = (known after apply)
+      [32m+[0m[0m name        = "emit-error-metric"
+      [32m+[0m[0m name_prefix = (known after apply)
+      [32m+[0m[0m policy      = jsonencode(
+            {
+              [32m+[0m[0m Statement = [
+                  [32m+[0m[0m {
+                      [32m+[0m[0m Action    = [
+                          [32m+[0m[0m "cloudwatch:PutMetricData",
+                        ]
+                      [32m+[0m[0m Condition = {
+                          [32m+[0m[0m StringEquals = {
+                              [32m+[0m[0m "cloudwatch:namespace" = "DemoApp"
+                            }
+                        }
+                      [32m+[0m[0m Effect    = "Allow"
+                      [32m+[0m[0m Resource  = "*"
+                      [32m+[0m[0m Sid       = "PutDemoAppMetrics"
+                    },
+                ]
+              [32m+[0m[0m Version   = "2012-10-17"
+            }
+        )
+      [32m+[0m[0m role        = (known after apply)
+    }
+
+[1m  # module.ecs_app[0].aws_iam_role_policy_attachment.execution[0m will be created
+[0m  [32m+[0m[0m resource "aws_iam_role_policy_attachment" "execution" {
+      [32m+[0m[0m id         = (known after apply)
+      [32m+[0m[0m policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+      [32m+[0m[0m role       = "ai-ops-serverless-dev-demo-app-execution-role"
+    }
+
+[1m  # module.ecs_app[0].aws_security_group.app[0m will be created
+[0m  [32m+[0m[0m resource "aws_security_group" "app" {
+      [32m+[0m[0m arn                    = (known after apply)
+      [32m+[0m[0m description            = "Demo app: HTTP from admin CIDR only"
+      [32m+[0m[0m egress                 = [
+          [32m+[0m[0m {
+              [32m+[0m[0m cidr_blocks      = [
+                  [32m+[0m[0m "0.0.0.0/0",
+                ]
+              [32m+[0m[0m description      = "All outbound (ECR pull, CloudWatch)"
+              [32m+[0m[0m from_port        = 0
+              [32m+[0m[0m ipv6_cidr_blocks = []
+              [32m+[0m[0m prefix_list_ids  = []
+              [32m+[0m[0m protocol         = "-1"
+              [32m+[0m[0m security_groups  = []
+              [32m+[0m[0m self             = false
+              [32m+[0m[0m to_port          = 0
+            },
+        ]
+      [32m+[0m[0m id                     = (known after apply)
+      [32m+[0m[0m ingress                = [
+          [32m+[0m[0m {
+              [32m+[0m[0m cidr_blocks      = [
+                  [32m+[0m[0m "0.0.0.0/0",
+                ]
+              [32m+[0m[0m description      = "App port from admin CIDR"
+              [32m+[0m[0m from_port        = 8080
+              [32m+[0m[0m ipv6_cidr_blocks = []
+              [32m+[0m[0m prefix_list_ids  = []
+              [32m+[0m[0m protocol         = "tcp"
+              [32m+[0m[0m security_groups  = []
+              [32m+[0m[0m self             = false
+              [32m+[0m[0m to_port          = 8080
+            },
+        ]
+      [32m+[0m[0m name                   = "ai-ops-serverless-dev-demo-app-sg"
+      [32m+[0m[0m name_prefix            = (known after apply)
+      [32m+[0m[0m owner_id               = (known after apply)
+      [32m+[0m[0m revoke_rules_on_delete = false
+      [32m+[0m[0m tags_all               = {
+          [32m+[0m[0m "Environment" = "dev"
+          [32m+[0m[0m "ManagedBy"   = "Terraform"
+          [32m+[0m[0m "Project"     = "ai-ops-serverless"
+          [32m+[0m[0m "Repository"  = "github.com/Lumbenlengo/AWS_AI_SERVERLESS_OPS"
+        }
+      [32m+[0m[0m vpc_id                 = "vpc-02a7c96963c82aa60"
+    }
+
+[1mPlan:[0m 11 to add, 0 to change, 0 to destroy.
+[0m
+Changes to Outputs:
+  [33m~[0m[0m demo_app_ecr_url               = "979054355604.dkr.ecr.us-east-1.amazonaws.com/ai-ops-serverless-dev-demo-app" -> (known after apply)
+[90m
+─────────────────────────────────────────────────────────────────────────────[0m
+
+Saved the plan to: tfplan
+
+To perform exactly these actions, run the following command to apply:
+    terraform apply "tfplan"

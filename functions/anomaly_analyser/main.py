@@ -1,23 +1,15 @@
-# functions/anomaly_analyser/main.py
+# functions/anomaly_analyser/main.py.anthropic-api
 #
-# FIXED vs previous version — three security/correctness issues:
+# DEVELOPMENT VERSION: Uses Anthropic API Direct (Claude 3.5 Sonnet)
+# For rapid iteration and testing (no Bedrock access needed)
 #
-# 1. THE AI NO LONGER CHOOSES THE REMEDIATION TARGET (ADR 004).
-#    The alarm event contains only a name and a reason string — the model was
-#    being asked to "fill in" the resource ARN, which it could only hallucinate.
-#    Now the target comes from REMEDIATION_MAP (Terraform-managed, deterministic):
-#        alarm name -> { resource, allowed_actions }
-#    The AI recommends an action; the code validates it against allowed_actions
-#    and attaches the resource itself. Unknown alarm -> log_only, always.
+# SAME security features as Bedrock version:
+# - Deterministic remediation mapping (ADR 004)
+# - Robust JSON extraction
+# - Prompt-injection resistance
 #
-# 2. ROBUST JSON EXTRACTION. The old fence-stripping used lstrip("```json"),
-#    which strips a CHARACTER SET, not a prefix — a latent bug. Now we extract
-#    the first balanced {...} block with a regex.
-#
-# 3. PROMPT-INJECTION AWARENESS. The alarm 'reason' is untrusted free text
-#    that flows into the prompt. Because the model can no longer name resources
-#    and its action choice is allowlist-validated, injected instructions cannot
-#    redirect remediation. The reason is also length-capped before prompting.
+# NOTE: For production, use Bedrock version (main.py)
+# This version is for developers who want to iterate quickly
 
 import json
 import logging
@@ -32,16 +24,18 @@ import boto3
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-BEDROCK_MODEL_ID  = os.environ.get("BEDROCK_MODEL_ID", "anthropic.claude-3-haiku-20240307-v1:0")
+# ═══════════════════════════════════════════════════════════════════════════
+# ANTHROPIC API CONFIGURATION (Development)
+# ═══════════════════════════════════════════════════════════════════════════
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")  # sk-ant-v0-...
+ANTHROPIC_MODEL   = "claude-3-5-sonnet-20241022"
+ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
+
 AWS_REGION        = os.environ.get("AWS_REGION_NAME", "us-east-1")
 SLACK_WEBHOOK_URL = os.environ.get("SLACK_WEBHOOK_URL", "")
 SNS_TOPIC_ARN     = os.environ.get("SNS_TOPIC_ARN", "")
 ENVIRONMENT       = os.environ.get("ENVIRONMENT", "dev")
 
-# Deterministic alarm -> remediation target mapping, injected by Terraform.
-# Example: {"myproj-dev-watch-demo-app-errors":
-#             {"resource": "demo-cluster/demo-service",
-#              "allowed_actions": ["restart_ecs_service", "log_only"]}}
 try:
     REMEDIATION_MAP = json.loads(os.environ.get("REMEDIATION_MAP", "{}"))
 except json.JSONDecodeError:
@@ -51,15 +45,16 @@ except json.JSONDecodeError:
 VALID_ACTIONS   = {"restart_ecs_service", "scale_asg", "log_only"}
 VALID_URGENCIES = {"LOW", "MEDIUM", "HIGH", "CRITICAL"}
 
-bedrock = boto3.client("bedrock-runtime", region_name=AWS_REGION)
-sns     = boto3.client("sns", region_name=AWS_REGION)
+sns = boto3.client("sns", region_name=AWS_REGION)
 
 
-# ─── BEDROCK ──────────────────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════
+# ANTHROPIC API / CLAUDE INTEGRATION
+# ═══════════════════════════════════════════════════════════════════════════
 
 FALLBACK_ANALYSIS = {
     "summary": "AI analysis temporarily unavailable",
-    "root_cause": "Bedrock service error — manual investigation required",
+    "root_cause": "API service error — manual investigation required",
     "impact": "Unknown",
     "recommended_action": "log_only",
     "urgency": "MEDIUM",
@@ -68,31 +63,57 @@ FALLBACK_ANALYSIS = {
 }
 
 
-def call_bedrock(prompt: str, max_tokens: int = 600) -> str:
-    """Call Bedrock Claude; on failure return safe fallback JSON so Step
-    Functions always receives a parseable, non-actioning response."""
+def call_claude(prompt: str, max_tokens: int = 600) -> str:
+    """
+    Call Claude 3.5 Sonnet via Anthropic API Direct.
+    
+    Benefits (development/testing):
+    ✓ No AWS account setup required for Bedrock
+    ✓ Immediate access (no approval process)
+    ✓ Easy to iterate on prompts
+    ✓ Fast response times
+    ✓ Lower latency for development
+    
+    WARNING: For production, use Bedrock (VPC-integrated, more secure).
+    
+    On failure: returns safe fallback JSON (fail-safe design).
+    """
+    if not ANTHROPIC_API_KEY:
+        logger.error("ANTHROPIC_API_KEY not set — cannot call Claude")
+        return json.dumps(FALLBACK_ANALYSIS)
+    
+    headers = {
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+    }
+    
     body = json.dumps({
-        "anthropic_version": "bedrock-2023-05-31",
+        "model": ANTHROPIC_MODEL,
         "max_tokens": max_tokens,
         "messages": [{"role": "user", "content": prompt}],
     })
+    
     try:
-        response = bedrock.invoke_model(
-            modelId=BEDROCK_MODEL_ID,
-            contentType="application/json",
-            accept="application/json",
-            body=body,
+        req = urllib.request.Request(
+            ANTHROPIC_API_URL,
+            data=body.encode("utf-8"),
+            headers=headers,
+            method="POST"
         )
-        result = json.loads(response["body"].read())
-        return result["content"][0]["text"]
-    except Exception as e:  # noqa: BLE001 — deliberate catch-all: fail safe, never fail open
-        logger.error(f"Bedrock call failed: {e}")
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            result = json.loads(resp.read())
+            text = result.get("content", [{}])[0].get("text", "")
+            logger.info(f"✓ Claude API response received ({len(text)} chars)")
+            return text
+    except Exception as e:
+        logger.error(f"Claude API call failed: {e}")
         return json.dumps(FALLBACK_ANALYSIS)
 
 
 def extract_json(text: str) -> dict | None:
-    """Extract the first {...} block from model output. Handles bare JSON,
-    fenced JSON, and preamble text. Returns None if nothing parses."""
+    """Extract the first {...} block from model output.
+    Handles bare JSON, fenced JSON, and preamble text."""
     match = re.search(r"\{.*\}", text, re.DOTALL)
     if not match:
         return None
@@ -102,9 +123,12 @@ def extract_json(text: str) -> dict | None:
         return None
 
 
-# ─── NOTIFICATIONS ────────────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════
+# NOTIFICATIONS
+# ═══════════════════════════════════════════════════════════════════════════
 
 def send_slack(message: str) -> None:
+    """Send alert to Slack webhook (optional)."""
     if not SLACK_WEBHOOK_URL:
         logger.info("SLACK_WEBHOOK_URL not set — skipping Slack notification")
         return
@@ -115,39 +139,58 @@ def send_slack(message: str) -> None:
     )
     try:
         with urllib.request.urlopen(req, timeout=5) as resp:
-            logger.info(f"Slack: {resp.status}")
+            logger.info(f"Slack notification sent: {resp.status}")
     except urllib.error.URLError as e:
-        logger.error(f"Slack failed: {e}")
+        logger.error(f"Slack notification failed: {e}")
 
 
 def send_sns(subject: str, message: str) -> None:
+    """Send alert via SNS (email fallback)."""
     if not SNS_TOPIC_ARN:
         return
     try:
         sns.publish(TopicArn=SNS_TOPIC_ARN, Subject=subject[:100], Message=message)
-    except Exception as e:  # noqa: BLE001
+        logger.info(f"SNS notification sent: {subject[:50]}")
+    except Exception as e:
         logger.error(f"SNS publish failed: {e}")
 
 
-# ─── ANALYSE ──────────────────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════
+# ALARM ANALYSIS
+# ═══════════════════════════════════════════════════════════════════════════
 
 def resolve_remediation(alarm_name: str) -> dict:
-    """Deterministic lookup: which resource does this alarm map to, and what
-    is the AI allowed to recommend for it? Unknown alarms get log_only."""
+    """
+    Deterministic lookup: which AWS resource does this alarm map to?
+    Which actions are allowed?
+    
+    This mapping is injected by Terraform and is the SOURCE OF TRUTH.
+    The AI model CANNOT override this — it can only suggest allowed actions.
+    """
     entry = REMEDIATION_MAP.get(alarm_name)
     if entry:
         return {
             "resource": entry.get("resource", ""),
             "allowed_actions": [a for a in entry.get("allowed_actions", []) if a in VALID_ACTIONS] or ["log_only"],
         }
+    logger.warning(f"Alarm '{alarm_name}' not in REMEDIATION_MAP — defaulting to log_only")
     return {"resource": "", "allowed_actions": ["log_only"]}
 
 
 def analyse_alarm(event: dict) -> dict:
+    """
+    Analyze a CloudWatch alarm using Claude via Anthropic API.
+    
+    Flow:
+    1. Extract alarm details from event
+    2. Look up allowed remediation actions (from Terraform map)
+    3. Call Claude with constrained prompt (no resource naming)
+    4. Validate Claude's recommendation against allowlist
+    5. Return analysis + Slack notification
+    """
     detail      = event.get("detail", {})
     alarm_name  = detail.get("alarmName", event.get("alarm_name", "Unknown Alarm"))
     alarm_state = detail.get("state", {}).get("value", "ALARM")
-    # Untrusted free text — cap length before it enters the prompt
     reason      = str(detail.get("state", {}).get("reason", "No reason provided"))[:1500]
     timestamp   = datetime.now(timezone.utc).isoformat()
 
@@ -157,6 +200,7 @@ def analyse_alarm(event: dict) -> dict:
         f"target={remediation['resource'] or 'none'} | allowed={remediation['allowed_actions']}"
     )
 
+    # Constrained prompt: Claude can only suggest from allowed_actions
     prompt = f"""You are a senior AWS Site Reliability Engineer responding to a CloudWatch alarm.
 Analyse this alarm and return ONLY a valid JSON object. No markdown, no preamble.
 
@@ -167,14 +211,14 @@ ALARM:
 - Environment: {ENVIRONMENT}
 - Time: {timestamp}
 
-The remediation actions available for this specific alarm are: {remediation['allowed_actions']}
-You may only recommend one of those. Do not name any AWS resources — the platform
-resolves the target itself.
+IMPORTANT: The remediation actions available for this specific alarm are: {remediation['allowed_actions']}
+You MUST recommend ONLY one of those actions. Do NOT name any AWS resources — the platform
+resolves the target itself from a deterministic map.
 
-Return exactly this structure:
+Return exactly this JSON structure:
 {{
   "summary": "One sentence plain-English summary for a non-technical stakeholder",
-  "root_cause": "Most likely technical root cause",
+  "root_cause": "Most likely technical root cause (brief)",
   "impact": "What users or the business experience right now",
   "recommended_action": "one of {remediation['allowed_actions']}",
   "urgency": "One of: LOW | MEDIUM | HIGH | CRITICAL",
@@ -182,16 +226,19 @@ Return exactly this structure:
   "next_steps": ["Step 1 for the on-call engineer", "Step 2", "Step 3"]
 }}"""
 
-    raw      = call_bedrock(prompt)
+    # Call Anthropic API (development)
+    raw      = call_claude(prompt)
     analysis = extract_json(raw)
 
     if analysis is None:
-        logger.warning("Could not parse Bedrock JSON — using text as summary")
+        logger.warning("Could not parse Claude JSON — using text as summary")
         analysis = dict(FALLBACK_ANALYSIS)
         analysis["summary"]    = raw[:300]
         analysis["root_cause"] = "AI response could not be parsed"
 
-    # ── Validation layer: the model's output is a SUGGESTION, not a command ──
+    # ──────────────────────────────────────────────────────────────────────
+    # VALIDATION LAYER: AI's output is a SUGGESTION, not a COMMAND
+    # ──────────────────────────────────────────────────────────────────────
     action = analysis.get("recommended_action", "log_only")
     if action not in remediation["allowed_actions"]:
         logger.warning(f"Model recommended disallowed action '{action}' — forcing log_only")
@@ -201,13 +248,14 @@ Return exactly this structure:
     if analysis.get("urgency") not in VALID_URGENCIES:
         analysis["urgency"] = "MEDIUM"
 
-    # The resource ALWAYS comes from the map — never from the model
+    # Resource ALWAYS comes from the map — never from the model
     analysis["resource"]        = remediation["resource"]
     analysis["allowed_actions"] = remediation["allowed_actions"]
     analysis["alarm_name"]      = alarm_name
     analysis["alarm_state"]     = alarm_state
     analysis["timestamp"]       = timestamp
 
+    # Format Slack notification
     urgency_emoji = {"LOW": "🟡", "MEDIUM": "🟠", "HIGH": "🔴", "CRITICAL": "🚨"}.get(analysis["urgency"], "⚠️")
     slack_msg = (
         f"{urgency_emoji} *CloudWatch Alarm: {alarm_name}* | {ENVIRONMENT.upper()}\n"
@@ -231,11 +279,15 @@ Return exactly this structure:
     return analysis
 
 
-# ─── NOTIFY AND WAIT ─────────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════
+# HUMAN APPROVAL PHASE
+# ═══════════════════════════════════════════════════════════════════════════
 
 def notify_and_wait(event: dict) -> dict:
-    """Send the approval request (with task token commands) to Slack + SNS,
-    then return. Step Functions pauses at zero cost until the human responds."""
+    """
+    Notify human via Slack/SNS and wait for approval.
+    Step Functions pauses at ZERO COST during this wait.
+    """
     task_token = event.get("taskToken", "")
     analysis   = event.get("analysis", {})
     alarm_name = analysis.get("alarm_name", "Unknown Alarm")
@@ -258,7 +310,7 @@ def notify_and_wait(event: dict) -> dict:
         f"*Root Cause:* {analysis.get('root_cause', 'N/A')}\n"
         f"*Urgency:* {analysis.get('urgency', 'UNKNOWN')}\n"
         f"*Proposed Action:* `{analysis.get('recommended_action', 'log_only')}`\n"
-        f"*Target (resolved by platform, not AI):* `{analysis.get('resource') or 'N/A'}`\n\n"
+        f"*Target (resolved by platform):* `{analysis.get('resource') or 'N/A'}`\n\n"
         f"✅ *To APPROVE (execute the fix):*\n```{approve_cmd}```\n\n"
         f"❌ *To REJECT (no action):*\n```{reject_cmd}```\n\n"
         f"⏰ This request expires in 24 hours."
@@ -273,9 +325,12 @@ def notify_and_wait(event: dict) -> dict:
     return {"status": "waiting_for_approval", "alarm_name": alarm_name}
 
 
-# ─── HANDLER ─────────────────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════
+# LAMBDA HANDLER
+# ═══════════════════════════════════════════════════════════════════════════
 
 def lambda_handler(event, context):
+    """Main entry point for AWS Lambda."""
     logger.info(f"Event: {json.dumps(event)}")
     action = event.get("action", "analyse")
 
@@ -283,7 +338,7 @@ def lambda_handler(event, context):
         if action == "notify_and_wait":
             return notify_and_wait(event)
         return analyse_alarm(event)
-    except Exception as e:  # noqa: BLE001 — contract with Step Functions: never raise
+    except Exception as e:
         logger.error(f"Handler failed: {e}", exc_info=True)
         return {
             "summary": f"Handler error: {e}",

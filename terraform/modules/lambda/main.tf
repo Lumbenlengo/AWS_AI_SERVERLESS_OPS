@@ -11,6 +11,7 @@ locals {
       env = {
         BEDROCK_MODEL_ID  = var.bedrock_model_id
         SLACK_WEBHOOK_URL = var.slack_webhook_url
+        ANTHROPIC_API_KEY = var.anthropic_api_key
         SNS_TOPIC_ARN     = var.sns_topic_arn
         REMEDIATION_MAP   = jsonencode(var.remediation_map)
       }

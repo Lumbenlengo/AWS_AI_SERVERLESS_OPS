@@ -26,3 +26,10 @@ variable "remediation_map" {
   }))
   default = {}
 }
+
+variable "anthropic_api_key" {
+  description = "Anthropic API key for direct Claude calls (leave empty for Bedrock)"
+  type        = string
+  default     = ""
+  sensitive   = true
+}

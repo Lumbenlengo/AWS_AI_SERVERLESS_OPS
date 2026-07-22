@@ -30,7 +30,7 @@ data "aws_caller_identity" "current" {}
 
 resource "aws_sns_topic" "alerts" {
   name              = "${var.project_name}-${var.environment}-alerts"
-  kms_master_key_id = "alias/aws/sns" # fixes CKV_AWS_26, was unencrypted
+  kms_master_key_id = "alias/aws/sns"
 }
 
 resource "aws_sns_topic_subscription" "email" {
@@ -91,12 +91,13 @@ module "lambda" {
   slack_webhook_url    = var.slack_webhook_url
   cost_alert_threshold = var.cost_alert_threshold
   sns_topic_arn        = aws_sns_topic.alerts.arn
+  anthropic_api_key    = var.anthropic_api_key
   runbooks_bucket_name = aws_s3_bucket.runbooks.id
   functions_path       = "${path.root}/../../../functions"
 
   remediation_map = var.demo_app_enabled ? {
     "${var.project_name}-${var.environment}-watch-demo-app-errors" = {
-      resource        = "${module.demo_app[0].cluster_name}/${module.demo_app[0].service_name}"
+      resource        = "${module.ecs_app[0].cluster_name}/${module.ecs_app[0].service_name}"
       allowed_actions = ["restart_ecs_service", "log_only"]
     }
   } : {}
@@ -156,7 +157,7 @@ module "api_gateway" {
 
 # MODULE: DEMO APP
 
-module "demo_app" {
+module "ecs_app" {
   count        = var.demo_app_enabled ? 1 : 0
   source       = "../../modules/ecs_app"
   project_name = var.project_name

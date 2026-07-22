@@ -8,13 +8,16 @@ on:
   pull_request:
 
 permissions:
-  id-token: write  
+  id-token: write
   contents: read
   pull-requests: write
 
 env:
   TF_DIR: terraform/environments/dev
   AWS_REGION: us-east-1
+  ECR_REPO: ai-ops-serverless-dev-demo-app
+  ECS_CLUSTER: ai-ops-serverless-dev-demo
+  ECS_SERVICE: ai-ops-serverless-dev-demo-app
 
 jobs:
   python-tests:
@@ -84,16 +87,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Debug OIDC token claims
-        run: |
-          TOKEN=$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | python3 -c "import sys,json; print(json.load(sys.stdin)['value'])")
-          python3 -c "
-          import json, base64
-          payload = '''$TOKEN'''.split('.')[1]
-          padded = payload + '=' * (-len(payload) % 4)
-          print(json.dumps(json.loads(base64.urlsafe_b64decode(padded)), indent=2))
-          "
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
@@ -107,7 +100,12 @@ jobs:
         working-directory: ${{ env.TF_DIR }}
         run: |
           terraform init
-          terraform plan -no-color -input=false -out=tfplan 2>&1 | tee plan.txt
+          terraform plan -no-color -input=false -out=tfplan \
+            -var="alert_email=${{ vars.ALERT_EMAIL }}" \
+            -var="github_repository=${{ github.repository }}" \
+            -var="slack_webhook_url=${{ secrets.SLACK_WEBHOOK_URL }}" \
+            -var="anthropic_api_key=${{ secrets.ANTHROPIC_API_KEY }}" \
+            2>&1 | tee plan.txt
       - name: Comment plan on PR
         uses: actions/github-script@v7
         with:
@@ -126,7 +124,7 @@ jobs:
     if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') && github.event_name == 'push'
     needs: [python-tests, terraform-quality, security-scan]
     runs-on: ubuntu-latest
-    environment: dev-apply   
+    environment: dev-apply
     steps:
       - uses: actions/checkout@v4
       - uses: aws-actions/configure-aws-credentials@v4
@@ -141,4 +139,48 @@ jobs:
         working-directory: ${{ env.TF_DIR }}
         run: |
           terraform init
-          terraform apply -auto-approve -input=false
+          terraform apply -auto-approve -input=false \
+            -var="alert_email=${{ vars.ALERT_EMAIL }}" \
+            -var="github_repository=${{ github.repository }}" \
+            -var="slack_webhook_url=${{ secrets.SLACK_WEBHOOK_URL }}" \
+            -var="anthropic_api_key=${{ secrets.ANTHROPIC_API_KEY }}"
+
+  build-demo-app:
+    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') && github.event_name == 'push'
+    needs: [apply]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-skip-session-tagging: true
+      - name: Login to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      - name: Build, tag and push demo app image
+        working-directory: app
+        run: |
+          IMAGE_URI="${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPO }}"
+          docker build -t "$IMAGE_URI:${{ github.sha }}" -t "$IMAGE_URI:latest" .
+          docker push "$IMAGE_URI:${{ github.sha }}"
+          docker push "$IMAGE_URI:latest"
+      - name: Force new ECS deployment
+        run: |
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service ${{ env.ECS_SERVICE }} \
+            --force-new-deployment \
+            --region ${{ env.AWS_REGION }}
+      - name: Wait for service to stabilise
+        run: |
+          aws ecs wait services-stable \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services ${{ env.ECS_SERVICE }} \
+            --region ${{ env.AWS_REGION }}
+          aws ecs describe-services \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services ${{ env.ECS_SERVICE }} \
+            --query 'services[0].{running:runningCount,desired:desiredCount,lastEvent:events[0].message}' \
+            --region ${{ env.AWS_REGION }}

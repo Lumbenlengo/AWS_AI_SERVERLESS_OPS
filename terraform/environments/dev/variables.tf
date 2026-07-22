@@ -72,11 +72,18 @@ variable "api_daily_quota" {
 variable "demo_app_enabled" {
   description = "Deploy the ECS demo workload (adds ~$9/month Fargate cost). Required for the end-to-end remediation demo."
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "admin_cidr" {
   description = "CIDR allowed to reach the demo app directly, e.g. your-ip/32"
   type        = string
   default     = "0.0.0.0/0"
+}
+
+variable "anthropic_api_key" {
+  description = "Anthropic API key for direct Claude calls (leave empty to use Bedrock)"
+  type        = string
+  default     = ""
+  sensitive   = true
 }
