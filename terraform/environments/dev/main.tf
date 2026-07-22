@@ -91,7 +91,7 @@ module "lambda" {
   slack_webhook_url    = var.slack_webhook_url
   cost_alert_threshold = var.cost_alert_threshold
   sns_topic_arn        = aws_sns_topic.alerts.arn
-  anthropic_api_key = var.anthropic_api_key
+  anthropic_api_key    = var.anthropic_api_key
   runbooks_bucket_name = aws_s3_bucket.runbooks.id
   functions_path       = "${path.root}/../../../functions"
 
