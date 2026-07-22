@@ -181,7 +181,7 @@ class TestRunbookAssistant:
         return {"httpMethod": "POST", "body": json.dumps({"question": question})}
 
     def test_returns_200_with_answer(self):
-        with patch.object(assistant, "call_claude", return_value="1. Do X. 2. Do Y."), \
+        with patch.object(assistant, "call_bedrock", return_value="1. Do X. 2. Do Y."), \
              patch.object(assistant, "load_runbooks", return_value={}):
             result = assistant.lambda_handler(self._event("How do I roll back?"), {})
         assert result["statusCode"] == 200
@@ -200,14 +200,14 @@ class TestRunbookAssistant:
         result = assistant.lambda_handler(self._event("x" * 2001), {})
         assert result["statusCode"] == 400
 
-    def test_returns_503_on_claude_failure(self):
-        with patch.object(assistant, "call_claude", side_effect=Exception("down")), \
+    def test_returns_503_on_bedrock_failure(self):
+        with patch.object(assistant, "call_bedrock", side_effect=Exception("down")), \
              patch.object(assistant, "load_runbooks", return_value={}):
             result = assistant.lambda_handler(self._event("How do I deploy?"), {})
         assert result["statusCode"] == 503
 
     def test_direct_invocation_works(self):
-        with patch.object(assistant, "call_claude", return_value="Step 1."), \
+        with patch.object(assistant, "call_bedrock", return_value="Step 1."), \
              patch.object(assistant, "load_runbooks", return_value={}):
             result = assistant.lambda_handler({"question": "How do I check costs?"}, {})
         assert result["statusCode"] == 200
