@@ -72,7 +72,7 @@ variable "api_daily_quota" {
 variable "demo_app_enabled" {
   description = "Deploy the ECS demo workload (adds ~$9/month Fargate cost). Required for the end-to-end remediation demo."
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "admin_cidr" {
