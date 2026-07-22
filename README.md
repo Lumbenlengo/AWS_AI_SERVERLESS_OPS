@@ -18,6 +18,45 @@ them in plain English to non-technical stakeholders, and safely automating remed
 with a human approval gate. The AI is a component in an event-driven system — not the system itself.
 
 ---
+CloudWatch Anomaly Detection
+         │
+         ▼
+    EventBridge ──────────────────────────────────────────┐
+         │                                                │
+         ▼                                                ▼
+  Lambda: Anomaly Analyser                    EventBridge Schedule
+         │                                    (daily 8am UTC)
+         │ boto3 → Bedrock Claude                         │
+         │                                                ▼
+         ▼                                    Lambda: Cost Reporter
+  Step Functions Workflow                              │
+         │                                             ▼
+    ┌────┴────┐                              Cost Explorer API
+    │AI Analyse│                                        │
+    └────┬────┘                                         ▼
+         │                                    Bedrock Claude
+    ┌────▼────┐                              (explain cost trend)
+    │Notify + │  ← Slack message with                   │
+    │  WAIT   │    Approve/Reject commands               ▼
+    └────┬────┘                                      SNS/Slack
+         │
+    Human clicks Approve
+         │
+    ┌────▼────┐
+    │Remediate│ ← ECS restart / ASG scale
+    └─────────┘
+
+  API Gateway (POST /ask)
+         │
+         ▼
+  Lambda: Runbook Assistant
+         │
+         ▼
+  S3 Runbooks → Bedrock Claude
+  (RAG pattern — answers from your docs)
+  
+  
+  <img width="1331" height="663" alt="diagram-export-22-07-2026-02_02_29" src="https://github.com/user-attachments/assets/418bd1ca-33dd-46c3-b789-5875d61a766c" />
 
 ## Architecture
 
