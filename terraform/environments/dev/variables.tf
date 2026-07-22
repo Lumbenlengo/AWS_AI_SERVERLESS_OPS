@@ -80,3 +80,10 @@ variable "admin_cidr" {
   type        = string
   default     = "0.0.0.0/0"
 }
+
+variable "anthropic_api_key" {
+  description = "Anthropic API key for direct Claude calls (leave empty to use Bedrock)"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
