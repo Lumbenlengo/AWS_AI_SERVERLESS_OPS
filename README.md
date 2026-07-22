@@ -358,5 +358,5 @@ Cloud Engineer | AWS | Infrastructure as Code
 *This project demonstrates production incident-response patterns: event-driven architecture,
 safe AI integration, Infrastructure as Code, and human governance. Everything is version-controlled,
 tested, and deployed via CI/CD.*
-<img width="1331" height="663" alt="diagram AI OPS PLATFORM" src="https://github.com/user-attachments/assets/25845f32-c4a8-4bac-8bd8-bc01264cd50f" />
+
 
