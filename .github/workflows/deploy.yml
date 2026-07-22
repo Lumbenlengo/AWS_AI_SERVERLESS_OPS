@@ -87,21 +87,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Show OIDC token claims
-        run: |
-          curl -sSL -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" \
-            | python3 -c "import sys, json; print(json.load(sys.stdin)['value'])" \
-            > /tmp/oidc_token.txt
-          python3 -c "
-          import json, base64
-          with open('/tmp/oidc_token.txt') as f:
-              token = f.read().strip()
-          payload = token.split('.')[1]
-          padded = payload + '=' * (-len(payload) % 4)
-          claims = json.loads(base64.urlsafe_b64decode(padded))
-          print(json.dumps(claims, indent=2))
-          "
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
@@ -115,7 +100,12 @@ jobs:
         working-directory: ${{ env.TF_DIR }}
         run: |
           terraform init
-          terraform plan -no-color -input=false -out=tfplan 2>&1 | tee plan.txt
+          terraform plan -no-color -input=false -out=tfplan \
+            -var="alert_email=${{ vars.ALERT_EMAIL }}" \
+            -var="github_repository=${{ github.repository }}" \
+            -var="slack_webhook_url=${{ secrets.SLACK_WEBHOOK_URL }}" \
+            -var="anthropic_api_key=${{ secrets.ANTHROPIC_API_KEY }}" \
+            2>&1 | tee plan.txt
       - name: Comment plan on PR
         uses: actions/github-script@v7
         with:
@@ -137,21 +127,6 @@ jobs:
     environment: dev-apply
     steps:
       - uses: actions/checkout@v4
-      - name: Show OIDC token claims
-        run: |
-          curl -sSL -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" \
-            | python3 -c "import sys, json; print(json.load(sys.stdin)['value'])" \
-            > /tmp/oidc_token.txt
-          python3 -c "
-          import json, base64
-          with open('/tmp/oidc_token.txt') as f:
-              token = f.read().strip()
-          payload = token.split('.')[1]
-          padded = payload + '=' * (-len(payload) % 4)
-          claims = json.loads(base64.urlsafe_b64decode(padded))
-          print(json.dumps(claims, indent=2))
-          "
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
@@ -164,10 +139,12 @@ jobs:
         working-directory: ${{ env.TF_DIR }}
         run: |
           terraform init
-          terraform apply -auto-approve -input=false
+          terraform apply -auto-approve -input=false \
+            -var="alert_email=${{ vars.ALERT_EMAIL }}" \
+            -var="github_repository=${{ github.repository }}" \
+            -var="slack_webhook_url=${{ secrets.SLACK_WEBHOOK_URL }}" \
+            -var="anthropic_api_key=${{ secrets.ANTHROPIC_API_KEY }}"
 
-  # NEW: builds the demo app Docker image and pushes it to ECR,
- 
   build-demo-app:
     if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') && github.event_name == 'push'
     needs: [apply]
