@@ -43,8 +43,6 @@ locals {
   prefix = "${var.project_name}-${var.environment}"
   name   = "${local.prefix}-demo-app"
 
-  # First two subnets become "private" (task lives here, no public IP).
-  # Next two stay "public" (ALB + NAT Gateway live here).
   private_subnet_ids = slice(data.aws_subnets.default.ids, 0, 2)
   public_subnet_ids  = slice(data.aws_subnets.default.ids, 2, 4)
 }
@@ -298,7 +296,7 @@ resource "aws_lb_listener" "app" {
 
 resource "aws_wafv2_web_acl" "alb" {
   name        = "${local.name}-waf"
-  description = "Baseline protection for the demo app ALB: AWS managed Common Rule Set"
+  description = "Baseline protection for the demo app ALB: AWS managed Common Rule Set + Known Bad Inputs (covers Log4Shell/CVE-2021-44228)"
   scope       = "REGIONAL"
 
   default_action {
@@ -327,6 +325,28 @@ resource "aws_wafv2_web_acl" "alb" {
     }
   }
 
+  rule {
+    name     = "AWS-AWSManagedRulesKnownBadInputsRuleSet"
+    priority = 2
+
+    override_action {
+      none {}
+    }
+
+    statement {
+      managed_rule_group_statement {
+        name        = "AWSManagedRulesKnownBadInputsRuleSet"
+        vendor_name = "AWS"
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "${local.name}-known-bad-inputs"
+      sampled_requests_enabled   = true
+    }
+  }
+
   visibility_config {
     cloudwatch_metrics_enabled = true
     metric_name                = "${local.name}-waf"
@@ -337,6 +357,20 @@ resource "aws_wafv2_web_acl" "alb" {
 resource "aws_wafv2_web_acl_association" "alb" {
   resource_arn = aws_lb.app.arn
   web_acl_arn  = aws_wafv2_web_acl.alb.arn
+}
+
+# WAF logging: the destination log group name MUST start with "aws-waf-logs-"
+
+resource "aws_cloudwatch_log_group" "waf" {
+  name              = "aws-waf-logs-${local.name}"
+  retention_in_days = 30
+}
+
+resource "aws_wafv2_web_acl_logging_configuration" "alb" {
+  resource_arn            = aws_wafv2_web_acl.alb.arn
+  log_destination_configs = [aws_cloudwatch_log_group.waf.arn]
+
+  depends_on = [aws_cloudwatch_log_group.waf]
 }
 
 # ── ECS ──────────────────────────────────────────────────────────────────────
