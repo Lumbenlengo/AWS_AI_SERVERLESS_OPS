@@ -16,8 +16,6 @@ METRIC_NS    = os.environ.get("METRIC_NAMESPACE", "DemoApp")
 SERVICE_NAME = os.environ.get("SERVICE_NAME", "orders-api")
 ENVIRONMENT  = os.environ.get("ENVIRONMENT", "dev")
 
-cloudwatch = boto3.client("cloudwatch", region_name=AWS_REGION)
-
 app = FastAPI(title="Orders API", version="1.0.0")
 
 STATE = {"chaos": False, "requests": 0, "errors": 0, "payments": 0, "payment_errors": 0, "started": time.time()}
@@ -31,9 +29,20 @@ ORDERS = [
 
 
 def emit_error_metric() -> None:
-    """Push one error datapoint for the watch- alarm."""
+    """Push one error datapoint for the watch- alarm.
+
+    FIX: the boto3 client is now created on-demand instead of at module
+    import time. Creating it at import time meant it was built before the
+    container's networking/IAM credential chain was necessarily ready,
+    and any failure there was invisible — calls looked like they succeeded
+    but nothing ever reached CloudWatch. Building it fresh here, and
+    logging both the attempt and the exact exception on failure, makes
+    this fully observable in CloudWatch Logs.
+    """
+    logger.info(f"Sending metric -> namespace={METRIC_NS} service={SERVICE_NAME}")
     try:
-        cloudwatch.put_metric_data(
+        cw = boto3.client("cloudwatch", region_name=AWS_REGION)
+        cw.put_metric_data(
             Namespace=METRIC_NS,
             MetricData=[{
                 "MetricName": "Errors",
@@ -42,8 +51,9 @@ def emit_error_metric() -> None:
                 "Unit": "Count",
             }],
         )
+        logger.info("put_metric_data succeeded")
     except Exception as e:
-        logger.warning(f"put_metric_data failed: {e}")
+        logger.error(f"put_metric_data FAILED: {e}", exc_info=True)
 
 
 @app.get("/health")
@@ -62,10 +72,9 @@ def health():
 
 @app.api_route("/process-payment", methods=["GET", "POST"])
 async def process_payment(request: Request):
-    """Payment processing endpoint. Now chaos-aware: when /chaos/on has been
-    called, this fails ~80% of the time too — previously only /api/orders
-    reacted to the chaos flag, so toggling chaos had no visible effect here.
-    Every failure emits the same CloudWatch metric the watch- alarm reads."""
+    """Payment processing endpoint. Chaos-aware: when /chaos/on has been
+    called, this fails ~80% of the time too. Every failure emits the same
+    CloudWatch metric the watch- alarm reads."""
     if request.method != "POST":
         return {
             "status": "info",
