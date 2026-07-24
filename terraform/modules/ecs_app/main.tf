@@ -5,15 +5,18 @@
 # can ONLY touch resources with this tag), plus the "watch-" alarm that feeds
 # the AI Ops workflow.
 #
-# Design notes (deliberate trade-offs for a ~$9/month demo):
-#   - Uses the default VPC + public IP instead of an ALB. An ALB alone costs
-#     ~$18/month; for a single-task demo, a security-grouped public IP is the
-#     honest cheap option. Production would use ALB + private subnets.
-#   - desired_count = 1, Fargate Spot for cost.
+# NETWORK ARCHITECTURE (updated from the original public-IP demo setup):
+#   Internet
+#      |
+#   ALB (public subnets, port 80)         <- aws_lb.app
+#      |
+#   Target Group -> Task (PRIVATE subnets, port 8080, no public IP)
+#      |
+#   NAT Gateway (public subnet)  -> Internet Gateway -> internet
+#      (outbound only: ECR image pulls, CloudWatch, Anthropic API calls)
 #
-# After `terraform apply`, build and push the image:
-#   aws ecr get-login-password | docker login --username AWS --password-stdin <repo>
-#   docker build -t <repo>:latest demo-app/ && docker push <repo>:latest
+
+
 
 data "aws_vpc" "default" {
   default = true
@@ -26,9 +29,21 @@ data "aws_subnets" "default" {
   }
 }
 
+data "aws_internet_gateway" "default" {
+  filter {
+    name   = "attachment.vpc-id"
+    values = [data.aws_vpc.default.id]
+  }
+}
+
 locals {
   prefix = "${var.project_name}-${var.environment}"
   name   = "${local.prefix}-demo-app"
+
+  # First two subnets become "private" (task lives here, no public IP).
+  # Next two stay "public" (ALB + NAT Gateway live here).
+  private_subnet_ids = slice(data.aws_subnets.default.ids, 0, 2)
+  public_subnet_ids  = slice(data.aws_subnets.default.ids, 2, 4)
 }
 
 # ── ECR ───────────────────────────────────────────────────────────────────────
@@ -92,27 +107,120 @@ resource "aws_iam_role_policy" "task" {
   })
 }
 
-# ── NETWORK ──────────────────────────────────────────────────────────────────
+# ── NAT GATEWAY (outbound internet access for the private subnets) ──────────
 
-resource "aws_security_group" "app" {
-  name        = "${local.name}-sg"
-  description = "Demo app: HTTP from admin CIDR only"
+resource "aws_eip" "nat" {
+  domain = "vpc"
+  tags   = { Name = "${local.name}-nat-eip" }
+}
+
+resource "aws_nat_gateway" "app" {
+  allocation_id = aws_eip.nat.id
+  subnet_id     = local.public_subnet_ids[0] # NAT must live in a PUBLIC subnet
+  tags          = { Name = "${local.name}-nat" }
+}
+
+# ── PRIVATE ROUTE TABLE (task subnets route out via NAT, not the IGW) ───────
+
+resource "aws_route_table" "private" {
+  vpc_id = data.aws_vpc.default.id
+
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.app.id
+  }
+
+  tags = { Name = "${local.name}-private-rt" }
+}
+
+resource "aws_route_table_association" "private" {
+  count          = length(local.private_subnet_ids)
+  subnet_id      = local.private_subnet_ids[count.index]
+  route_table_id = aws_route_table.private.id
+}
+
+# ── SECURITY GROUPS ──────────────────────────────────────────────────────────
+
+resource "aws_security_group" "alb" {
+  name        = "${local.name}-alb-sg"
+  description = "ALB: public HTTP from admin CIDR"
   vpc_id      = data.aws_vpc.default.id
 
   ingress {
-    description = "App port from admin CIDR"
-    from_port   = 8080
-    to_port     = 8080
+    description = "HTTP from admin CIDR"
+    from_port   = 80
+    to_port     = 80
     protocol    = "tcp"
     cidr_blocks = [var.admin_cidr]
   }
 
   egress {
-    description = "All outbound (ECR pull, CloudWatch)"
+    description = "To the task on its container port"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+resource "aws_security_group" "app" {
+  name        = "${local.name}-sg"
+  description = "Demo app task: only reachable from the ALB, not the internet"
+  vpc_id      = data.aws_vpc.default.id
+
+  ingress {
+    description     = "App port, ALB only"
+    from_port       = 8080
+    to_port         = 8080
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb.id]
+  }
+
+  egress {
+    description = "All outbound (via NAT Gateway: ECR pull, CloudWatch, Anthropic API)"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+# ── ALB ───────────────────────────────────────────────────────────────────────
+
+resource "aws_lb" "app" {
+  name               = "${local.name}-alb"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.alb.id]
+  subnets            = local.public_subnet_ids
+}
+
+resource "aws_lb_target_group" "app" {
+  name        = "${local.name}-tg"
+  port        = 8080
+  protocol    = "HTTP"
+  vpc_id      = data.aws_vpc.default.id
+  target_type = "ip" # required for awsvpc network mode (Fargate)
+
+  health_check {
+    path                = "/health"
+    port                = "traffic-port"
+    healthy_threshold   = 2
+    unhealthy_threshold = 3
+    interval            = 15
+    timeout             = 5
+    matcher             = "200"
+  }
+}
+
+resource "aws_lb_listener" "app" {
+  load_balancer_arn = aws_lb.app.arn
+  port              = 80
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.app.arn
   }
 }
 
@@ -169,18 +277,24 @@ resource "aws_ecs_service" "app" {
   }
 
   network_configuration {
-    subnets          = data.aws_subnets.default.ids
+    subnets          = local.private_subnet_ids
     security_groups  = [aws_security_group.app.id]
-    assign_public_ip = true
+    assign_public_ip = false # now behind the ALB, in a private subnet
   }
 
-  # THE tag: the remediator's IAM policy only permits ecs:UpdateService on
-  # resources carrying AIOpsManaged=true. Untagged services are untouchable.
+  load_balancer {
+    target_group_arn = aws_lb_target_group.app.arn
+    container_name   = "orders-api"
+    container_port   = 8080
+  }
+
   tags = { AIOpsManaged = "true" }
 
   lifecycle {
-    ignore_changes = [task_definition] # image pushes redeploy via forceNewDeployment
+    ignore_changes = [task_definition]
   }
+
+  depends_on = [aws_lb_listener.app]
 }
 
 # ── THE "WATCH-" ALARM (this is what feeds the AI Ops workflow) ──────────────

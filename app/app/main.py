@@ -7,7 +7,6 @@ import boto3
 from fastapi import FastAPI, HTTPException, Request, Response
 import uvicorn
 
-# Configuration
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("orders-api")
 
@@ -29,20 +28,21 @@ ORDERS = [
 
 
 def emit_error_metric() -> None:
-    """Push one error datapoint for the watch- alarm.
+    """Push one error datapoint for the watch- alarm."""
+    logger.info(f"DEBUG: emit_error_metric called | ns={METRIC_NS} service={SERVICE_NAME} region={AWS_REGION}")
 
-    FIX: the boto3 client is now created on-demand instead of at module
-    import time. Creating it at import time meant it was built before the
-    container's networking/IAM credential chain was necessarily ready,
-    and any failure there was invisible — calls looked like they succeeded
-    but nothing ever reached CloudWatch. Building it fresh here, and
-    logging both the attempt and the exact exception on failure, makes
-    this fully observable in CloudWatch Logs.
-    """
-    logger.info(f"Sending metric -> namespace={METRIC_NS} service={SERVICE_NAME}")
+    try:
+        sts = boto3.client("sts", region_name=AWS_REGION)
+        identity = sts.get_caller_identity()
+        logger.info(f"DEBUG: running as ARN={identity.get('Arn')} account={identity.get('Account')}")
+    except Exception as e:
+        logger.error(f"DEBUG: STS get_caller_identity FAILED: {type(e).__name__}: {e}", exc_info=True)
+
     try:
         cw = boto3.client("cloudwatch", region_name=AWS_REGION)
-        cw.put_metric_data(
+        logger.info(f"DEBUG: cloudwatch client created, endpoint={cw.meta.endpoint_url}")
+
+        response = cw.put_metric_data(
             Namespace=METRIC_NS,
             MetricData=[{
                 "MetricName": "Errors",
@@ -51,9 +51,18 @@ def emit_error_metric() -> None:
                 "Unit": "Count",
             }],
         )
-        logger.info("put_metric_data succeeded")
+
+        status_code = response.get("ResponseMetadata", {}).get("HTTPStatusCode")
+        request_id = response.get("ResponseMetadata", {}).get("RequestId")
+        logger.info(f"DEBUG: put_metric_data HTTP {status_code} | RequestId={request_id}")
+
+        if status_code == 200:
+            logger.info("SUCCESS: CloudWatch accepted the metric")
+        else:
+            logger.error(f"SUSPICIOUS: put_metric_data returned non-200 without raising: {response}")
+
     except Exception as e:
-        logger.error(f"put_metric_data FAILED: {e}", exc_info=True)
+        logger.error(f"FAILED put_metric_data: {type(e).__name__}: {e}", exc_info=True)
 
 
 @app.get("/health")
@@ -72,9 +81,6 @@ def health():
 
 @app.api_route("/process-payment", methods=["GET", "POST"])
 async def process_payment(request: Request):
-    """Payment processing endpoint. Chaos-aware: when /chaos/on has been
-    called, this fails ~80% of the time too. Every failure emits the same
-    CloudWatch metric the watch- alarm reads."""
     if request.method != "POST":
         return {
             "status": "info",
@@ -126,9 +132,6 @@ def chaos_off():
 
 @app.get("/")
 def dashboard():
-    """Visual status dashboard — this is what you show in the Loom video
-    instead of raw JSON. Auto-refreshes every 3s, has buttons to trigger
-    a test order, a test payment, and to break/fix the service live."""
     return Response(content=DASHBOARD_HTML, media_type="text/html")
 
 
@@ -222,10 +225,7 @@ DASHBOARD_HTML = """<!doctype html>
   <footer>
     "Break this service" flips an in-memory fault: <code>/api/orders</code> and
     <code>/process payment</code> start failing most of the time, and every
-    failure emits a CloudWatch metric. The watch alarm fires, the AI Ops
-    workflow analyses it, and an approved ECS restart clears the fault for
-    real  for the Loom recording, keep this page open in one tab and
-    Mission Control open in another.
+    failure emits a CloudWatch metric that the watch alarm reads.
   </footer>
 </main>
 <script>

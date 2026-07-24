@@ -7,7 +7,7 @@
 #      |
 #   [AI_Analysis]         Lambda calls Bedrock Claude
 #      |
-#   [Route_By_Urgency]    HIGH/CRITICAL -> human gate, LOW -> log and stop
+#   [Route_By_Urgency]    LOW -> log and stop, anything else -> human gate
 #      |
 #   [Notify_And_Wait]     Slack message + PAUSE (waitForTaskToken)
 #      |                  costs $0 while waiting, no timeout
@@ -18,6 +18,7 @@
 # waitForTaskToken: the workflow pauses here. The Lambda sends a Slack
 # message containing the task token. The human runs an AWS CLI command
 # with that token to resume. No polling, no Lambda running while waiting.
+
 
 resource "aws_cloudwatch_log_group" "sfn" {
   name              = "/aws/states/${var.project_name}-${var.environment}-ai-ops"
@@ -34,7 +35,6 @@ resource "aws_sfn_state_machine" "ai_ops" {
     include_execution_data = true
     level                  = "ALL"
   }
-
 
   tracing_configuration {
     enabled = true
@@ -72,25 +72,20 @@ resource "aws_sfn_state_machine" "ai_ops" {
 
       Route_By_Urgency = {
         Type    = "Choice"
-        Comment = "HIGH and CRITICAL urgency goes to human approval. LOW/MEDIUM just logs."
+        Comment = "Only LOW urgency bypasses human approval. MEDIUM, HIGH, CRITICAL (and the fallback's own MEDIUM default) all require a human decision."
         Choices = [
           {
             Variable     = "$.ai_result.analysis.urgency"
-            StringEquals = "HIGH"
-            Next         = "Notify_And_Wait"
-          },
-          {
-            Variable     = "$.ai_result.analysis.urgency"
-            StringEquals = "CRITICAL"
-            Next         = "Notify_And_Wait"
+            StringEquals = "LOW"
+            Next         = "Log_Low_Priority"
           }
         ]
-        Default = "Log_Low_Priority"
+        Default = "Notify_And_Wait"
       }
 
       Log_Low_Priority = {
         Type    = "Pass"
-        Comment = "Urgency is LOW or MEDIUM. Logged. No engineer paged."
+        Comment = "Urgency is LOW. Logged. No engineer paged."
         Result  = { outcome = "logged_no_action_required" }
         End     = true
       }
