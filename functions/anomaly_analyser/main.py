@@ -338,7 +338,7 @@ def lambda_handler(event, context):
         if action == "notify_and_wait":
             return notify_and_wait(event)
         return analyse_alarm(event)
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         logger.error(f"Handler failed: {e}", exc_info=True)
         return {
             "summary": f"Handler error: {e}",
