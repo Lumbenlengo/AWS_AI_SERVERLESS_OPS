@@ -106,7 +106,7 @@ def call_claude(prompt: str, max_tokens: int = 600) -> str:
             text = result.get("content", [{}])[0].get("text", "")
             logger.info(f"✓ Claude API response received ({len(text)} chars)")
             return text
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         logger.error(f"Claude API call failed: {e}")
         return json.dumps(FALLBACK_ANALYSIS)
 
@@ -151,7 +151,7 @@ def send_sns(subject: str, message: str) -> None:
     try:
         sns.publish(TopicArn=SNS_TOPIC_ARN, Subject=subject[:100], Message=message)
         logger.info(f"SNS notification sent: {subject[:50]}")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         logger.error(f"SNS publish failed: {e}")
 
 
@@ -338,7 +338,7 @@ def lambda_handler(event, context):
         if action == "notify_and_wait":
             return notify_and_wait(event)
         return analyse_alarm(event)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         logger.error(f"Handler failed: {e}", exc_info=True)
         return {
             "summary": f"Handler error: {e}",
