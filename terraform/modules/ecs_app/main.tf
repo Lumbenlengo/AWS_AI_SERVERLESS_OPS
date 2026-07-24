@@ -1,4 +1,4 @@
-# terraform/modules/ecs_app/main.tf
+# terraform/modules/ecs_demo_app/main.tf
 #
 # The workload the platform monitors and remediates: a Fargate service running
 # the Orders API demo app, tagged AIOpsManaged=true (the remediator's IAM role
@@ -14,7 +14,6 @@
 #      |
 #   NAT Gateway (public subnet) -> Internet Gateway -> internet
 #      (outbound only: ECR image pulls, CloudWatch, Anthropic API calls)
-
 
 data "aws_vpc" "default" {
   default = true
@@ -36,12 +35,16 @@ data "aws_internet_gateway" "default" {
 
 data "aws_caller_identity" "current" {}
 
-# The AWS-owned account that writes ALB access logs into your S3 bucket.
 data "aws_elb_service_account" "main" {}
 
 locals {
   prefix = "${var.project_name}-${var.environment}"
   name   = "${local.prefix}-demo-app"
+
+
+  alb_name = "${local.prefix}-app-alb"
+  tg_name  = "${local.prefix}-app-tg"
+
 
   private_subnet_ids = slice(data.aws_subnets.default.ids, 0, 2)
   public_subnet_ids  = slice(data.aws_subnets.default.ids, 2, 4)
@@ -246,7 +249,7 @@ resource "aws_security_group" "app" {
 # ── ALB ───────────────────────────────────────────────────────────────────────
 
 resource "aws_lb" "app" {
-  name                       = "${local.name}-alb"
+  name                       = local.alb_name
   internal                   = false
   load_balancer_type         = "application"
   security_groups            = [aws_security_group.alb.id]
@@ -264,7 +267,7 @@ resource "aws_lb" "app" {
 }
 
 resource "aws_lb_target_group" "app" {
-  name        = "${local.name}-tg"
+  name        = local.tg_name
   port        = 8080
   protocol    = "HTTP"
   vpc_id      = data.aws_vpc.default.id
@@ -359,7 +362,6 @@ resource "aws_wafv2_web_acl_association" "alb" {
   web_acl_arn  = aws_wafv2_web_acl.alb.arn
 }
 
-# WAF logging: the destination log group name MUST start with "aws-waf-logs-"
 
 resource "aws_cloudwatch_log_group" "waf" {
   name              = "aws-waf-logs-${local.name}"
@@ -437,12 +439,11 @@ resource "aws_ecs_service" "app" {
     container_port   = 8080
   }
 
-  # THE tag: the remediator's IAM policy only permits ecs:UpdateService on
-  # resources carrying AIOpsManaged=true. Untagged services are untouchable.
+
   tags = { AIOpsManaged = "true" }
 
   lifecycle {
-    ignore_changes = [task_definition] # image pushes redeploy via forceNewDeployment
+    ignore_changes = [task_definition]
   }
 
   depends_on = [aws_lb_listener.app]
