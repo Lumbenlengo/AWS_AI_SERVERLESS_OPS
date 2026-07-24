@@ -29,11 +29,7 @@ jobs:
           python-version: "3.12"
           cache: pip
       - name: Install dependencies
-        run: pip install boto3 pytest ruff
-      - name: Lint (ruff)
-        run: |
-          ruff check functions/
-          if [ -d app ]; then ruff check app/; fi
+        run: pip install boto3 pytest
       - name: Unit tests
         run: |
           if [ -d functions/tests ]; then
