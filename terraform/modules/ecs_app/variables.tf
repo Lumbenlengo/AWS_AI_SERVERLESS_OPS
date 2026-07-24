@@ -3,6 +3,6 @@ variable "environment" { type = string }
 variable "aws_region" { type = string }
 
 variable "admin_cidr" {
-  description = "CIDR allowed to reach the demo app on :8080"
+  description = "CIDR allowed to reach the demo app ALB on :80"
   type        = string
 }

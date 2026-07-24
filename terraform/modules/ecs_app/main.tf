@@ -1,21 +1,19 @@
-# terraform/modules/ecs_demo_app/main.tf
+# terraform/modules/ecs_app/main.tf
 #
 # The workload the platform monitors and remediates: a Fargate service running
 # the Orders API demo app, tagged AIOpsManaged=true (the remediator's IAM role
 # can ONLY touch resources with this tag), plus the "watch-" alarm that feeds
 # the AI Ops workflow.
 #
-# NETWORK ARCHITECTURE (updated from the original public-IP demo setup):
+# NETWORK + EDGE ARCHITECTURE:
 #   Internet
 #      |
-#   ALB (public subnets, port 80)         <- aws_lb.app
+#   ALB (public subnets, port 80, WAF attached)
 #      |
 #   Target Group -> Task (PRIVATE subnets, port 8080, no public IP)
 #      |
-#   NAT Gateway (public subnet)  -> Internet Gateway -> internet
+#   NAT Gateway (public subnet) -> Internet Gateway -> internet
 #      (outbound only: ECR image pulls, CloudWatch, Anthropic API calls)
-#
-
 
 
 data "aws_vpc" "default" {
@@ -35,6 +33,11 @@ data "aws_internet_gateway" "default" {
     values = [data.aws_vpc.default.id]
   }
 }
+
+data "aws_caller_identity" "current" {}
+
+# The AWS-owned account that writes ALB access logs into your S3 bucket.
+data "aws_elb_service_account" "main" {}
 
 locals {
   prefix = "${var.project_name}-${var.environment}"
@@ -116,7 +119,7 @@ resource "aws_eip" "nat" {
 
 resource "aws_nat_gateway" "app" {
   allocation_id = aws_eip.nat.id
-  subnet_id     = local.public_subnet_ids[0] # NAT must live in a PUBLIC subnet
+  subnet_id     = local.public_subnet_ids[0]
   tags          = { Name = "${local.name}-nat" }
 }
 
@@ -137,6 +140,63 @@ resource "aws_route_table_association" "private" {
   count          = length(local.private_subnet_ids)
   subnet_id      = local.private_subnet_ids[count.index]
   route_table_id = aws_route_table.private.id
+}
+
+# ── S3: ALB ACCESS LOGS ───────────────────────────────────────────────────────
+
+resource "aws_s3_bucket" "alb_logs" {
+  bucket        = "${local.name}-alb-logs-${data.aws_caller_identity.current.account_id}"
+  force_destroy = true
+}
+
+resource "aws_s3_bucket_public_access_block" "alb_logs" {
+  bucket                  = aws_s3_bucket.alb_logs.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_versioning" "alb_logs" {
+  bucket = aws_s3_bucket.alb_logs.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "alb_logs" {
+  bucket = aws_s3_bucket.alb_logs.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+resource "aws_s3_bucket_policy" "alb_logs" {
+  bucket = aws_s3_bucket.alb_logs.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "AllowELBAccountLogDelivery"
+        Effect    = "Allow"
+        Principal = { AWS = data.aws_elb_service_account.main.arn }
+        Action    = "s3:PutObject"
+        Resource  = "${aws_s3_bucket.alb_logs.arn}/alb-logs/AWSLogs/${data.aws_caller_identity.current.account_id}/*"
+      },
+      {
+        Sid       = "AllowLogDeliveryServiceWrite"
+        Effect    = "Allow"
+        Principal = { Service = "logdelivery.elasticloadbalancing.amazonaws.com" }
+        Action    = "s3:PutObject"
+        Resource  = "${aws_s3_bucket.alb_logs.arn}/alb-logs/AWSLogs/${data.aws_caller_identity.current.account_id}/*"
+        Condition = {
+          StringEquals = { "s3:x-amz-acl" = "bucket-owner-full-control" }
+        }
+      }
+    ]
+  })
 }
 
 # ── SECURITY GROUPS ──────────────────────────────────────────────────────────
@@ -188,11 +248,21 @@ resource "aws_security_group" "app" {
 # ── ALB ───────────────────────────────────────────────────────────────────────
 
 resource "aws_lb" "app" {
-  name               = "${local.name}-alb"
-  internal           = false
-  load_balancer_type = "application"
-  security_groups    = [aws_security_group.alb.id]
-  subnets            = local.public_subnet_ids
+  name                       = "${local.name}-alb"
+  internal                   = false
+  load_balancer_type         = "application"
+  security_groups            = [aws_security_group.alb.id]
+  subnets                    = local.public_subnet_ids
+  drop_invalid_header_fields = true
+  enable_deletion_protection = true
+
+  access_logs {
+    bucket  = aws_s3_bucket.alb_logs.id
+    prefix  = "alb-logs"
+    enabled = true
+  }
+
+  depends_on = [aws_s3_bucket_policy.alb_logs]
 }
 
 resource "aws_lb_target_group" "app" {
@@ -200,7 +270,7 @@ resource "aws_lb_target_group" "app" {
   port        = 8080
   protocol    = "HTTP"
   vpc_id      = data.aws_vpc.default.id
-  target_type = "ip" # required for awsvpc network mode (Fargate)
+  target_type = "ip"
 
   health_check {
     path                = "/health"
@@ -222,6 +292,51 @@ resource "aws_lb_listener" "app" {
     type             = "forward"
     target_group_arn = aws_lb_target_group.app.arn
   }
+}
+
+# ── WAF ───────────────────────────────────────────────────────────────────────
+
+resource "aws_wafv2_web_acl" "alb" {
+  name        = "${local.name}-waf"
+  description = "Baseline protection for the demo app ALB: AWS managed Common Rule Set"
+  scope       = "REGIONAL"
+
+  default_action {
+    allow {}
+  }
+
+  rule {
+    name     = "AWS-AWSManagedRulesCommonRuleSet"
+    priority = 1
+
+    override_action {
+      none {}
+    }
+
+    statement {
+      managed_rule_group_statement {
+        name        = "AWSManagedRulesCommonRuleSet"
+        vendor_name = "AWS"
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "${local.name}-common-rules"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  visibility_config {
+    cloudwatch_metrics_enabled = true
+    metric_name                = "${local.name}-waf"
+    sampled_requests_enabled   = true
+  }
+}
+
+resource "aws_wafv2_web_acl_association" "alb" {
+  resource_arn = aws_lb.app.arn
+  web_acl_arn  = aws_wafv2_web_acl.alb.arn
 }
 
 # ── ECS ──────────────────────────────────────────────────────────────────────
@@ -279,7 +394,7 @@ resource "aws_ecs_service" "app" {
   network_configuration {
     subnets          = local.private_subnet_ids
     security_groups  = [aws_security_group.app.id]
-    assign_public_ip = false # now behind the ALB, in a private subnet
+    assign_public_ip = false
   }
 
   load_balancer {
@@ -288,10 +403,12 @@ resource "aws_ecs_service" "app" {
     container_port   = 8080
   }
 
+  # THE tag: the remediator's IAM policy only permits ecs:UpdateService on
+  # resources carrying AIOpsManaged=true. Untagged services are untouchable.
   tags = { AIOpsManaged = "true" }
 
   lifecycle {
-    ignore_changes = [task_definition]
+    ignore_changes = [task_definition] # image pushes redeploy via forceNewDeployment
   }
 
   depends_on = [aws_lb_listener.app]
