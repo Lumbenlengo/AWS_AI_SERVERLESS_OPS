@@ -54,7 +54,7 @@ resource "aws_subnet" "alb" {
 
   cidr_block              = cidrsubnet(data.aws_vpc.default.cidr_block, 8, 96 + count.index)
   availability_zone       = local.private_azs[count.index]
-  map_public_ip_on_launch = true
+  map_public_ip_on_launch = false
   tags                    = { Name = "${local.name}-alb-subnet-${count.index}" }
 }
 

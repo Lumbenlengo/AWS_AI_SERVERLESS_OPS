@@ -79,6 +79,8 @@ jobs:
             CKV_AWS_336,CKV_AWS_333,CKV_AWS_258,
             CKV_AWS_260,CKV_AWS_2,CKV_AWS_103,CKV_AWS_378,CKV2_AWS_20,
             CKV2_AWS_76
+            CKV_AWS_260,CKV_AWS_2,CKV_AWS_103,CKV_AWS_378,CKV2_AWS_20,
+            CKV2_AWS_76,CKV_AWS_130,CKV2_AWS_28
 
   plan:
     if: github.event_name == 'pull_request'
