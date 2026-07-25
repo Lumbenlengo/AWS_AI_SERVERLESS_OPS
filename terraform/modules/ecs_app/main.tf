@@ -1,19 +1,5 @@
 # terraform/modules/ecs_demo_app/main.tf
-#
-# The workload the platform monitors and remediates: a Fargate service running
-# the Orders API demo app, tagged AIOpsManaged=true (the remediator's IAM role
-# can ONLY touch resources with this tag), plus the "watch-" alarm that feeds
-# the AI Ops workflow.
-#
-# NETWORK + EDGE ARCHITECTURE:
-#   Internet
-#      |
-#   ALB (public subnets, port 80, WAF attached)
-#      |
-#   Target Group -> Task (PRIVATE subnets, port 8080, no public IP)
-#      |
-#   NAT Gateway (public subnet) -> Internet Gateway -> internet
-#      (outbound only: ECR image pulls, CloudWatch, Anthropic API calls)
+
 
 data "aws_vpc" "default" {
   default = true
@@ -35,19 +21,58 @@ data "aws_internet_gateway" "default" {
 
 data "aws_caller_identity" "current" {}
 
+# The AWS-owned account that writes ALB access logs into your S3 bucket.
 data "aws_elb_service_account" "main" {}
 
 locals {
   prefix = "${var.project_name}-${var.environment}"
   name   = "${local.prefix}-demo-app"
 
-
+ 
   alb_name = "${local.prefix}-app-alb"
   tg_name  = "${local.prefix}-app-tg"
 
-
+  
   private_subnet_ids = slice(data.aws_subnets.default.ids, 0, 2)
-  public_subnet_ids  = slice(data.aws_subnets.default.ids, 2, 4)
+  
+  public_subnet_ids = slice(data.aws_subnets.default.ids, 2, 4)
+}
+
+
+data "aws_subnet" "private" {
+  for_each = toset(local.private_subnet_ids)
+  id       = each.value
+}
+
+locals {
+  private_azs = [for id in local.private_subnet_ids : data.aws_subnet.private[id].availability_zone]
+}
+
+resource "aws_subnet" "alb" {
+  count  = length(local.private_subnet_ids)
+  vpc_id = data.aws_vpc.default.id
+  
+  cidr_block              = cidrsubnet(data.aws_vpc.default.cidr_block, 8, 96 + count.index)
+  availability_zone       = local.private_azs[count.index]
+  map_public_ip_on_launch = true
+  tags                    = { Name = "${local.name}-alb-subnet-${count.index}" }
+}
+
+resource "aws_route_table" "alb_public" {
+  vpc_id = data.aws_vpc.default.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = data.aws_internet_gateway.default.id
+  }
+
+  tags = { Name = "${local.name}-alb-public-rt" }
+}
+
+resource "aws_route_table_association" "alb_public" {
+  count          = length(aws_subnet.alb)
+  subnet_id      = aws_subnet.alb[count.index].id
+  route_table_id = aws_route_table.alb_public.id
 }
 
 # ── ECR ───────────────────────────────────────────────────────────────────────
@@ -120,7 +145,7 @@ resource "aws_eip" "nat" {
 
 resource "aws_nat_gateway" "app" {
   allocation_id = aws_eip.nat.id
-  subnet_id     = local.public_subnet_ids[0]
+  subnet_id     = local.public_subnet_ids[0] 
   tags          = { Name = "${local.name}-nat" }
 }
 
@@ -225,7 +250,7 @@ resource "aws_security_group" "alb" {
 }
 
 resource "aws_security_group" "app" {
-  name        = "${local.name}-sg"
+  name_prefix = "${local.name}-sg-"
   description = "Demo app task: only reachable from the ALB, not the internet"
   vpc_id      = data.aws_vpc.default.id
 
@@ -244,6 +269,10 @@ resource "aws_security_group" "app" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # ── ALB ───────────────────────────────────────────────────────────────────────
@@ -253,7 +282,7 @@ resource "aws_lb" "app" {
   internal                   = false
   load_balancer_type         = "application"
   security_groups            = [aws_security_group.alb.id]
-  subnets                    = local.public_subnet_ids
+  subnets                    = aws_subnet.alb[*].id
   drop_invalid_header_fields = true
   enable_deletion_protection = true
 
@@ -293,86 +322,6 @@ resource "aws_lb_listener" "app" {
     type             = "forward"
     target_group_arn = aws_lb_target_group.app.arn
   }
-}
-
-# ── WAF ───────────────────────────────────────────────────────────────────────
-
-resource "aws_wafv2_web_acl" "alb" {
-  name        = "${local.name}-waf"
-  description = "Baseline protection for the demo app ALB: AWS managed Common Rule Set + Known Bad Inputs (covers Log4Shell/CVE-2021-44228)"
-  scope       = "REGIONAL"
-
-  default_action {
-    allow {}
-  }
-
-  rule {
-    name     = "AWS-AWSManagedRulesCommonRuleSet"
-    priority = 1
-
-    override_action {
-      none {}
-    }
-
-    statement {
-      managed_rule_group_statement {
-        name        = "AWSManagedRulesCommonRuleSet"
-        vendor_name = "AWS"
-      }
-    }
-
-    visibility_config {
-      cloudwatch_metrics_enabled = true
-      metric_name                = "${local.name}-common-rules"
-      sampled_requests_enabled   = true
-    }
-  }
-
-  rule {
-    name     = "AWS-AWSManagedRulesKnownBadInputsRuleSet"
-    priority = 2
-
-    override_action {
-      none {}
-    }
-
-    statement {
-      managed_rule_group_statement {
-        name        = "AWSManagedRulesKnownBadInputsRuleSet"
-        vendor_name = "AWS"
-      }
-    }
-
-    visibility_config {
-      cloudwatch_metrics_enabled = true
-      metric_name                = "${local.name}-known-bad-inputs"
-      sampled_requests_enabled   = true
-    }
-  }
-
-  visibility_config {
-    cloudwatch_metrics_enabled = true
-    metric_name                = "${local.name}-waf"
-    sampled_requests_enabled   = true
-  }
-}
-
-resource "aws_wafv2_web_acl_association" "alb" {
-  resource_arn = aws_lb.app.arn
-  web_acl_arn  = aws_wafv2_web_acl.alb.arn
-}
-
-
-resource "aws_cloudwatch_log_group" "waf" {
-  name              = "aws-waf-logs-${local.name}"
-  retention_in_days = 30
-}
-
-resource "aws_wafv2_web_acl_logging_configuration" "alb" {
-  resource_arn            = aws_wafv2_web_acl.alb.arn
-  log_destination_configs = [aws_cloudwatch_log_group.waf.arn]
-
-  depends_on = [aws_cloudwatch_log_group.waf]
 }
 
 # ── ECS ──────────────────────────────────────────────────────────────────────
@@ -438,7 +387,6 @@ resource "aws_ecs_service" "app" {
     container_name   = "orders-api"
     container_port   = 8080
   }
-
 
   tags = { AIOpsManaged = "true" }
 
