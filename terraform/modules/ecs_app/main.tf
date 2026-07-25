@@ -28,13 +28,13 @@ locals {
   prefix = "${var.project_name}-${var.environment}"
   name   = "${local.prefix}-demo-app"
 
- 
+
   alb_name = "${local.prefix}-app-alb"
   tg_name  = "${local.prefix}-app-tg"
 
-  
+
   private_subnet_ids = slice(data.aws_subnets.default.ids, 0, 2)
-  
+
   public_subnet_ids = slice(data.aws_subnets.default.ids, 2, 4)
 }
 
@@ -51,7 +51,7 @@ locals {
 resource "aws_subnet" "alb" {
   count  = length(local.private_subnet_ids)
   vpc_id = data.aws_vpc.default.id
-  
+
   cidr_block              = cidrsubnet(data.aws_vpc.default.cidr_block, 8, 96 + count.index)
   availability_zone       = local.private_azs[count.index]
   map_public_ip_on_launch = true
@@ -145,7 +145,7 @@ resource "aws_eip" "nat" {
 
 resource "aws_nat_gateway" "app" {
   allocation_id = aws_eip.nat.id
-  subnet_id     = local.public_subnet_ids[0] 
+  subnet_id     = local.public_subnet_ids[0]
   tags          = { Name = "${local.name}-nat" }
 }
 
