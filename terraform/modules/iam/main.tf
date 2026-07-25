@@ -1,25 +1,20 @@
 # terraform/modules/iam/main.tf
-#
-# REAL least privilege  one role per Lambda function.
-# The previous version shared one role across all 4 Lambdas, which meant the
-# public-facing runbook assistant could restart ECS services. Fixed:
-#
-#   analyser      -> Bedrock (this model only), SNS (this topic only)
-#   runbook       -> Bedrock (this model only), S3 read (runbooks bucket only)
-#   cost_reporter -> Cost Explorer read, Bedrock, SNS
-#   remediator    -> ECS/ASG mutate, SNS  (the ONLY role that can change infra)
-#
-# Note: no Lambda needs states:SendTaskSuccess — the approval callback is sent
-# by the human's CLI credentials, not by Lambda. That permission was removed.
 
 data "aws_caller_identity" "current" {}
 
 locals {
-  prefix            = "${var.project_name}-${var.environment}"
-  bedrock_model_arn = "arn:aws:bedrock:${var.aws_region}::foundation-model/${var.bedrock_model_id}"
-  log_group_arns    = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/${local.prefix}-*"
-}
+  prefix         = "${var.project_name}-${var.environment}"
+  log_group_arns = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/${local.prefix}-*"
 
+  bedrock_is_inference_profile = can(regex("^(us|eu|apac)\\.", var.bedrock_model_id))
+
+  bedrock_profile_arn = "arn:aws:bedrock:${var.aws_region}:${data.aws_caller_identity.current.account_id}:inference-profile/${var.bedrock_model_id}"
+
+  bedrock_foundation_model_id  = local.bedrock_is_inference_profile ? join(".", slice(split(".", var.bedrock_model_id), 1, length(split(".", var.bedrock_model_id)))) : var.bedrock_model_id
+  bedrock_foundation_model_arn = "arn:aws:bedrock:*::foundation-model/${local.bedrock_foundation_model_id}"
+
+  bedrock_model_arns = local.bedrock_is_inference_profile ? [local.bedrock_profile_arn, local.bedrock_foundation_model_arn] : [local.bedrock_foundation_model_arn]
+}
 # ── SHARED TRUST + BASELINE POLICIES ─────────────────────────────────────────
 
 data "aws_iam_policy_document" "lambda_assume" {
@@ -67,7 +62,7 @@ resource "aws_iam_role_policy" "analyser" {
         Sid      = "BedrockThisModelOnly"
         Effect   = "Allow"
         Action   = ["bedrock:InvokeModel"]
-        Resource = local.bedrock_model_arn
+        Resource = local.bedrock_model_arns
       },
       {
         Sid      = "SNSThisTopicOnly"
@@ -101,7 +96,7 @@ resource "aws_iam_role_policy" "runbook" {
         Sid      = "BedrockThisModelOnly"
         Effect   = "Allow"
         Action   = ["bedrock:InvokeModel"]
-        Resource = local.bedrock_model_arn
+        Resource = local.bedrock_model_arns
       },
       {
         Sid      = "RunbooksBucketReadOnly"
@@ -141,7 +136,7 @@ resource "aws_iam_role_policy" "cost_reporter" {
         Sid      = "BedrockThisModelOnly"
         Effect   = "Allow"
         Action   = ["bedrock:InvokeModel"]
-        Resource = local.bedrock_model_arn
+        Resource = local.bedrock_model_arns
       },
       {
         Sid      = "SNSThisTopicOnly"
@@ -159,8 +154,7 @@ resource "aws_iam_role_policy_attachment" "cost_reporter_base" {
 }
 
 # ── ROLE 4: REMEDIATOR (the only role that can mutate infrastructure) ────────
-# ECS/ASG actions are scoped by tag: it may only touch resources tagged
-# AIOpsManaged=true. Defence in depth on top of the allowlist in code.
+
 
 resource "aws_iam_role" "remediator" {
   name               = "${local.prefix}-remediator-role"
@@ -287,9 +281,7 @@ resource "aws_iam_role_policy" "eventbridge_sfn" {
 }
 
 # ── GITHUB ACTIONS OIDC (tightened) ──────────────────────────────────────────
-# Previous version: lambda:*, states:*, iam:PassRole on * — a privilege
-# escalation path (PassRole + lambda:CreateFunction = run code as any role).
-# Now: PassRole restricted to this project's roles, actions scoped by ARN.
+
 
 resource "aws_iam_openid_connect_provider" "github" {
   url            = "https://token.actions.githubusercontent.com"

@@ -28,11 +28,16 @@ variable "environment" {
   }
 }
 
+
+
 variable "bedrock_model_id" {
-  description = "Amazon Bedrock model ID for Claude"
+  description = "Amazon Bedrock model ID for Claude (inference profile requires cross-region 'us.' prefix)"
   type        = string
-  default     = "anthropic.claude-3-haiku-20240307-v1:0"
+  default     = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
 }
+
+
+
 
 variable "slack_webhook_url" {
   description = "Slack Incoming Webhook URL. Set via TF_VAR_slack_webhook_url — never commit."

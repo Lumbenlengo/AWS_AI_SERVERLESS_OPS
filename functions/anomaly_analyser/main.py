@@ -1,15 +1,5 @@
-# functions/anomaly_analyser/main.py.anthropic-api
-#
-# DEVELOPMENT VERSION: Uses Anthropic API Direct (Claude 3.5 Sonnet)
-# For rapid iteration and testing (no Bedrock access needed)
-#
-# SAME security features as Bedrock version:
-# - Deterministic remediation mapping (ADR 004)
-# - Robust JSON extraction
-# - Prompt-injection resistance
-#
-# NOTE: For production, use Bedrock version (main.py)
-# This version is for developers who want to iterate quickly
+# functions/anomaly_analyser/main.py
+
 
 import json
 import logging
@@ -25,13 +15,14 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 # ═══════════════════════════════════════════════════════════════════════════
-# ANTHROPIC API CONFIGURATION (Development)
+# BEDROCK CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════════
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")  # sk-ant-v0-...
-ANTHROPIC_MODEL   = "claude-3-5-sonnet-20241022"
-ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
+AWS_REGION = os.environ.get("AWS_REGION_NAME", "us-east-1")
 
-AWS_REGION        = os.environ.get("AWS_REGION_NAME", "us-east-1")
+BEDROCK_MODEL_ID = os.environ.get(
+    "BEDROCK_MODEL_ID", "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+)
+
 SLACK_WEBHOOK_URL = os.environ.get("SLACK_WEBHOOK_URL", "")
 SNS_TOPIC_ARN     = os.environ.get("SNS_TOPIC_ARN", "")
 ENVIRONMENT       = os.environ.get("ENVIRONMENT", "dev")
@@ -45,11 +36,12 @@ except json.JSONDecodeError:
 VALID_ACTIONS   = {"restart_ecs_service", "scale_asg", "log_only"}
 VALID_URGENCIES = {"LOW", "MEDIUM", "HIGH", "CRITICAL"}
 
-sns = boto3.client("sns", region_name=AWS_REGION)
+sns     = boto3.client("sns", region_name=AWS_REGION)
+bedrock = boto3.client("bedrock-runtime", region_name=AWS_REGION)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# ANTHROPIC API / CLAUDE INTEGRATION
+# BEDROCK / CLAUDE INTEGRATION
 # ═══════════════════════════════════════════════════════════════════════════
 
 FALLBACK_ANALYSIS = {
@@ -65,49 +57,34 @@ FALLBACK_ANALYSIS = {
 
 def call_claude(prompt: str, max_tokens: int = 600) -> str:
     """
-    Call Claude 3.5 Sonnet via Anthropic API Direct.
-    
-    Benefits (development/testing):
-    ✓ No AWS account setup required for Bedrock
-    ✓ Immediate access (no approval process)
-    ✓ Easy to iterate on prompts
-    ✓ Fast response times
-    ✓ Lower latency for development
-    
-    WARNING: For production, use Bedrock (VPC-integrated, more secure).
-    
+    Call Claude via Amazon Bedrock (Messages API format).
+
+    Benefits:
+    ✓ Billed through AWS, no separate Anthropic account/credits needed
+    ✓ VPC-integrated, IAM-controlled — no API key to manage or leak
+    ✓ Same fail-safe design: on failure, returns safe fallback JSON
+
     On failure: returns safe fallback JSON (fail-safe design).
     """
-    if not ANTHROPIC_API_KEY:
-        logger.error("ANTHROPIC_API_KEY not set — cannot call Claude")
-        return json.dumps(FALLBACK_ANALYSIS)
-    
-    headers = {
-        "x-api-key": ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-    }
-    
     body = json.dumps({
-        "model": ANTHROPIC_MODEL,
+        "anthropic_version": "bedrock-2023-05-31",
         "max_tokens": max_tokens,
         "messages": [{"role": "user", "content": prompt}],
     })
-    
+
     try:
-        req = urllib.request.Request(
-            ANTHROPIC_API_URL,
-            data=body.encode("utf-8"),
-            headers=headers,
-            method="POST"
+        response = bedrock.invoke_model(
+            modelId=BEDROCK_MODEL_ID,
+            body=body,
+            contentType="application/json",
+            accept="application/json",
         )
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            result = json.loads(resp.read())
-            text = result.get("content", [{}])[0].get("text", "")
-            logger.info(f"✓ Claude API response received ({len(text)} chars)")
-            return text
+        result = json.loads(response["body"].read())
+        text = result.get("content", [{}])[0].get("text", "")
+        logger.info(f"✓ Bedrock response received ({len(text)} chars)")
+        return text
     except Exception as e:  # noqa: BLE001
-        logger.error(f"Claude API call failed: {e}")
+        logger.error(f"Bedrock call failed: {e}", exc_info=True)
         return json.dumps(FALLBACK_ANALYSIS)
 
 
@@ -163,7 +140,7 @@ def resolve_remediation(alarm_name: str) -> dict:
     """
     Deterministic lookup: which AWS resource does this alarm map to?
     Which actions are allowed?
-    
+
     This mapping is injected by Terraform and is the SOURCE OF TRUTH.
     The AI model CANNOT override this — it can only suggest allowed actions.
     """
@@ -179,8 +156,8 @@ def resolve_remediation(alarm_name: str) -> dict:
 
 def analyse_alarm(event: dict) -> dict:
     """
-    Analyze a CloudWatch alarm using Claude via Anthropic API.
-    
+    Analyze a CloudWatch alarm using Claude via Amazon Bedrock.
+
     Flow:
     1. Extract alarm details from event
     2. Look up allowed remediation actions (from Terraform map)
@@ -200,7 +177,7 @@ def analyse_alarm(event: dict) -> dict:
         f"target={remediation['resource'] or 'none'} | allowed={remediation['allowed_actions']}"
     )
 
-    # Constrained prompt: Claude can only suggest from allowed_actions
+   
     prompt = f"""You are a senior AWS Site Reliability Engineer responding to a CloudWatch alarm.
 Analyse this alarm and return ONLY a valid JSON object. No markdown, no preamble.
 
@@ -226,7 +203,7 @@ Return exactly this JSON structure:
   "next_steps": ["Step 1 for the on-call engineer", "Step 2", "Step 3"]
 }}"""
 
-    # Call Anthropic API (development)
+    # Call Bedrock
     raw      = call_claude(prompt)
     analysis = extract_json(raw)
 
