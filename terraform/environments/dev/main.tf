@@ -94,6 +94,8 @@ module "lambda" {
   anthropic_api_key    = var.anthropic_api_key
   runbooks_bucket_name = aws_s3_bucket.runbooks.id
   functions_path       = "${path.root}/../../../functions"
+  mission_control_url  = var.mission_control_url
+
 
   remediation_map = var.demo_app_enabled ? {
     "${var.project_name}-${var.environment}-watch-demo-app-errors" = {

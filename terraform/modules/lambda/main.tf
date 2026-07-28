@@ -1,6 +1,5 @@
 # terraform/modules/lambda/main.tf
 
-
 locals {
   prefix = "${var.project_name}-${var.environment}"
 
@@ -9,11 +8,12 @@ locals {
       name    = "anomaly-analyser"
       timeout = 60
       env = {
-        BEDROCK_MODEL_ID  = var.bedrock_model_id
-        SLACK_WEBHOOK_URL = var.slack_webhook_url
-        ANTHROPIC_API_KEY = var.anthropic_api_key
-        SNS_TOPIC_ARN     = var.sns_topic_arn
-        REMEDIATION_MAP   = jsonencode(var.remediation_map)
+        BEDROCK_MODEL_ID    = var.bedrock_model_id
+        SLACK_WEBHOOK_URL   = var.slack_webhook_url
+        ANTHROPIC_API_KEY   = var.anthropic_api_key
+        SNS_TOPIC_ARN       = var.sns_topic_arn
+        REMEDIATION_MAP     = jsonencode(var.remediation_map)
+        MISSION_CONTROL_URL = var.mission_control_url
       }
     }
     runbook_assistant = {
@@ -72,7 +72,7 @@ resource "aws_lambda_function" "fn" {
   environment {
     variables = merge(
       {
-        AWS_REGION_NAME = var.aws_region # AWS_REGION is reserved by the runtime
+        AWS_REGION_NAME = var.aws_region
         ENVIRONMENT     = var.environment
       },
       each.value.env

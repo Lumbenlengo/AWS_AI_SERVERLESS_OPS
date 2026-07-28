@@ -1,6 +1,5 @@
 # functions/anomaly_analyser/main.py
 
-
 import json
 import logging
 import os
@@ -23,9 +22,10 @@ BEDROCK_MODEL_ID = os.environ.get(
     "BEDROCK_MODEL_ID", "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
 )
 
-SLACK_WEBHOOK_URL = os.environ.get("SLACK_WEBHOOK_URL", "")
-SNS_TOPIC_ARN     = os.environ.get("SNS_TOPIC_ARN", "")
-ENVIRONMENT       = os.environ.get("ENVIRONMENT", "dev")
+SLACK_WEBHOOK_URL    = os.environ.get("SLACK_WEBHOOK_URL", "")
+SNS_TOPIC_ARN        = os.environ.get("SNS_TOPIC_ARN", "")
+ENVIRONMENT          = os.environ.get("ENVIRONMENT", "dev")
+MISSION_CONTROL_URL  = os.environ.get("MISSION_CONTROL_URL", "")
 
 try:
     REMEDIATION_MAP = json.loads(os.environ.get("REMEDIATION_MAP", "{}"))
@@ -35,6 +35,8 @@ except json.JSONDecodeError:
 
 VALID_ACTIONS   = {"restart_ecs_service", "scale_asg", "log_only"}
 VALID_URGENCIES = {"LOW", "MEDIUM", "HIGH", "CRITICAL"}
+
+URGENCY_EMOJI = {"LOW": "🟡", "MEDIUM": "🟠", "HIGH": "🔴", "CRITICAL": "🚨"}
 
 sns     = boto3.client("sns", region_name=AWS_REGION)
 bedrock = boto3.client("bedrock-runtime", region_name=AWS_REGION)
@@ -58,12 +60,6 @@ FALLBACK_ANALYSIS = {
 def call_claude(prompt: str, max_tokens: int = 600) -> str:
     """
     Call Claude via Amazon Bedrock (Messages API format).
-
-    Benefits:
-    ✓ Billed through AWS, no separate Anthropic account/credits needed
-    ✓ VPC-integrated, IAM-controlled — no API key to manage or leak
-    ✓ Same fail-safe design: on failure, returns safe fallback JSON
-
     On failure: returns safe fallback JSON (fail-safe design).
     """
     body = json.dumps({
@@ -89,8 +85,7 @@ def call_claude(prompt: str, max_tokens: int = 600) -> str:
 
 
 def extract_json(text: str) -> dict | None:
-    """Extract the first {...} block from model output.
-    Handles bare JSON, fenced JSON, and preamble text."""
+    """Extract the first {...} block from model output."""
     match = re.search(r"\{.*\}", text, re.DOTALL)
     if not match:
         return None
@@ -139,8 +134,6 @@ def send_sns(subject: str, message: str) -> None:
 def resolve_remediation(alarm_name: str) -> dict:
     """
     Deterministic lookup: which AWS resource does this alarm map to?
-    Which actions are allowed?
-
     This mapping is injected by Terraform and is the SOURCE OF TRUTH.
     The AI model CANNOT override this — it can only suggest allowed actions.
     """
@@ -158,12 +151,10 @@ def analyse_alarm(event: dict) -> dict:
     """
     Analyze a CloudWatch alarm using Claude via Amazon Bedrock.
 
-    Flow:
-    1. Extract alarm details from event
-    2. Look up allowed remediation actions (from Terraform map)
-    3. Call Claude with constrained prompt (no resource naming)
-    4. Validate Claude's recommendation against allowlist
-    5. Return analysis + Slack notification
+    Slack behaviour: this function ONLY sends a Slack message when urgency
+    is LOW (auto-logged, no approval needed). Anything else is left to
+    notify_and_wait(), which sends exactly ONE clean message with the
+    approval link — avoids two near-duplicate messages per alarm.
     """
     detail      = event.get("detail", {})
     alarm_name  = detail.get("alarmName", event.get("alarm_name", "Unknown Alarm"))
@@ -177,7 +168,6 @@ def analyse_alarm(event: dict) -> dict:
         f"target={remediation['resource'] or 'none'} | allowed={remediation['allowed_actions']}"
     )
 
-   
     prompt = f"""You are a senior AWS Site Reliability Engineer responding to a CloudWatch alarm.
 Analyse this alarm and return ONLY a valid JSON object. No markdown, no preamble.
 
@@ -203,7 +193,6 @@ Return exactly this JSON structure:
   "next_steps": ["Step 1 for the on-call engineer", "Step 2", "Step 3"]
 }}"""
 
-    # Call Bedrock
     raw      = call_claude(prompt)
     analysis = extract_json(raw)
 
@@ -232,18 +221,18 @@ Return exactly this JSON structure:
     analysis["alarm_state"]     = alarm_state
     analysis["timestamp"]       = timestamp
 
-    # Format Slack notification
-    urgency_emoji = {"LOW": "🟡", "MEDIUM": "🟠", "HIGH": "🔴", "CRITICAL": "🚨"}.get(analysis["urgency"], "⚠️")
-    slack_msg = (
-        f"{urgency_emoji} *CloudWatch Alarm: {alarm_name}* | {ENVIRONMENT.upper()}\n"
-        f"*Urgency:* {analysis['urgency']}\n"
-        f"*Summary:* {analysis.get('summary')}\n"
-        f"*Root Cause:* {analysis.get('root_cause')}\n"
-        f"*Recommended Action:* `{analysis['recommended_action']}` on `{analysis['resource'] or 'n/a'}`\n"
-        f"*Next Steps:*\n"
-        + "\n".join(f"  {i + 1}. {s}" for i, s in enumerate(analysis.get("next_steps", [])))
-    )
-    send_slack(slack_msg)
+    urgency_emoji = URGENCY_EMOJI.get(analysis["urgency"], "⚠️")
+
+    # Only LOW urgency gets its own Slack message — short, informative,
+    # no action needed. Everything else is handled by notify_and_wait().
+    if analysis["urgency"] == "LOW":
+        slack_msg = (
+            f"{urgency_emoji} *{alarm_name}*  ·  {ENVIRONMENT.upper()}\n"
+            f"Auto-logged, no action needed.\n"
+            f"> {analysis.get('summary')}"
+        )
+        send_slack(slack_msg)
+
     send_sns(
         subject=f"[{ENVIRONMENT.upper()}] {urgency_emoji} Alarm: {alarm_name}",
         message=(
@@ -262,40 +251,43 @@ Return exactly this JSON structure:
 
 def notify_and_wait(event: dict) -> dict:
     """
-    Notify human via Slack/SNS and wait for approval.
+    Notify human via ONE clean Slack message + wait for approval.
     Step Functions pauses at ZERO COST during this wait.
+
+    No task token or CLI command is shown in Slack — approval happens via
+    the Mission Control link, keeping the message short and readable.
     """
-    task_token = event.get("taskToken", "")
     analysis   = event.get("analysis", {})
     alarm_name = analysis.get("alarm_name", "Unknown Alarm")
+    urgency    = analysis.get("urgency", "MEDIUM")
+    urgency_emoji = URGENCY_EMOJI.get(urgency, "⚠️")
 
-    approve_cmd = (
-        "aws stepfunctions send-task-success "
-        f"--task-token '{task_token}' "
-        '--task-output \'{"approved": true}\''
-    )
-    reject_cmd = (
-        "aws stepfunctions send-task-success "
-        f"--task-token '{task_token}' "
-        '--task-output \'{"approved": false}\''
+    next_steps = analysis.get("next_steps", [])
+    steps_block = "\n".join(f"   {i + 1}. {s}" for i, s in enumerate(next_steps)) if next_steps else ""
+
+    mc_line = (
+        f"👉 <{MISSION_CONTROL_URL}|Open Mission Control to approve or reject>"
+        if MISSION_CONTROL_URL else
+        "⚠️ Mission Control URL not configured — approve via AWS Console (Step Functions)."
     )
 
     message = (
-        f"🤖 *AI Ops: Human Approval Required*\n"
-        f"*Alarm:* `{alarm_name}` ({ENVIRONMENT.upper()})\n"
-        f"*AI Summary:* {analysis.get('summary', 'N/A')}\n"
-        f"*Root Cause:* {analysis.get('root_cause', 'N/A')}\n"
-        f"*Urgency:* {analysis.get('urgency', 'UNKNOWN')}\n"
-        f"*Proposed Action:* `{analysis.get('recommended_action', 'log_only')}`\n"
-        f"*Target (resolved by platform):* `{analysis.get('resource') or 'N/A'}`\n\n"
-        f"✅ *To APPROVE (execute the fix):*\n```{approve_cmd}```\n\n"
-        f"❌ *To REJECT (no action):*\n```{reject_cmd}```\n\n"
-        f"⏰ This request expires in 24 hours."
+        f"{urgency_emoji} *{alarm_name}*  ·  {ENVIRONMENT.upper()}  ·  needs approval\n"
+        f"\n"
+        f"*Summary*\n> {analysis.get('summary', 'N/A')}\n"
+        f"\n"
+        f"*Root cause*\n> {analysis.get('root_cause', 'N/A')}\n"
+        f"\n"
+        f"*Proposed fix:* `{analysis.get('recommended_action', 'log_only')}` "
+        f"on `{analysis.get('resource') or 'N/A'}`\n"
+        + (f"\n*Next steps*\n{steps_block}\n" if steps_block else "")
+        + f"\n{mc_line}\n"
+        f"⏰ Expires in 24 hours."
     )
     send_slack(message)
     send_sns(
         subject=f"[ACTION REQUIRED] AI Ops approval needed: {alarm_name}",
-        message=f"Approve:\n{approve_cmd}\n\nReject:\n{reject_cmd}",
+        message=f"Open Mission Control to approve or reject:\n{MISSION_CONTROL_URL}",
     )
 
     logger.info(f"Approval notification sent for: {alarm_name}")

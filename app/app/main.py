@@ -1,6 +1,7 @@
 import logging
 import os
 import random
+import threading
 import time
 
 import boto3
@@ -65,6 +66,33 @@ def emit_error_metric() -> None:
         logger.error(f"FAILED put_metric_data: {type(e).__name__}: {e}", exc_info=True)
 
 
+def simulate_chaos_traffic(duration_seconds: int = 90, interval_seconds: float = 3.0) -> None:
+    """
+    Self-generate traffic against the orders endpoint while chaos is on.
+
+    Without this, clicking "Break this service" only flips a flag on the
+    server — nothing actually calls the API, so no errors happen, no
+    metric is emitted, and the CloudWatch alarm never fires on its own.
+    This makes the button fully self-contained: one click produces real
+    failing requests, real metrics, and a real alarm, with no manual
+    curl loop or external traffic needed.
+
+    Runs in a background thread so the HTTP response to /chaos/on returns
+    immediately. Stops early on its own if chaos is turned back off.
+    """
+    end_time = time.time() + duration_seconds
+    sent = 0
+    while time.time() < end_time and STATE["chaos"]:
+        STATE["requests"] += 1
+        sent += 1
+        if random.random() < 0.8:
+            STATE["errors"] += 1
+            emit_error_metric()
+            logger.error("simulated failure: connection pool exhausted (self-triggered)")
+        time.sleep(interval_seconds)
+    logger.info(f"Chaos self-traffic generator stopped after {sent} simulated requests")
+
+
 @app.get("/health")
 def health():
     return {
@@ -87,6 +115,10 @@ async def process_payment(request: Request):
             "message": "API is alive! Please send a POST request to process a payment."
         }
 
+    # Small artificial delay so manual test clicks feel like a real network
+    # call instead of an instant fake response.
+    time.sleep(random.uniform(0.1, 0.3))
+
     STATE["requests"] += 1
     STATE["payments"] += 1
     data = await request.json()
@@ -107,6 +139,10 @@ async def process_payment(request: Request):
 
 @app.get("/api/orders")
 def list_orders():
+    # Small artificial delay so manual test clicks feel like a real network
+    # call instead of an instant fake response.
+    time.sleep(random.uniform(0.1, 0.3))
+
     STATE["requests"] += 1
     if STATE["chaos"] and random.random() < 0.8:
         STATE["errors"] += 1
@@ -120,6 +156,8 @@ def list_orders():
 def chaos_on():
     STATE["chaos"] = True
     logger.warning("CHAOS ENABLED — service will now fail most requests")
+    # Kick off self-contained traffic generation — no external curl loop needed.
+    threading.Thread(target=simulate_chaos_traffic, daemon=True).start()
     return {"chaos": True}
 
 
@@ -223,9 +261,12 @@ DASHBOARD_HTML = """<!doctype html>
   </div>
 
   <footer>
-    "Break this service" flips an in-memory fault: <code>/api/orders</code> and
-    <code>/process payment</code> start failing most of the time, and every
-    failure emits a CloudWatch metric that the watch alarm reads.
+    "Break this service" enables chaos mode AND automatically generates
+    about 90 seconds of self-contained traffic against <code>/api/orders</code> —
+    real requests, real errors, real CloudWatch metrics. No manual curl
+    loop needed. The watch alarm fires on its own from this alone.
+    "Stop breaking it" ends chaos mode immediately and stops the traffic
+    generator on its next cycle.
   </footer>
 </main>
 <script>
@@ -273,7 +314,7 @@ async function hitPayment(){
 }
 async function chaos(on){
   await fetch('/chaos/' + (on ? 'on' : 'off'), {method:'POST'});
-  addLog(on ? 'Chaos mode ENABLED' : 'Chaos mode disabled', !on);
+  addLog(on ? 'Chaos mode ENABLED — self-generating traffic for ~90s' : 'Chaos mode disabled', !on);
   refresh();
 }
 refresh(); setInterval(refresh, 3000);

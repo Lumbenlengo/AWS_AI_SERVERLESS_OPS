@@ -92,3 +92,8 @@ variable "anthropic_api_key" {
   default     = ""
   sensitive   = true
 }
+variable "mission_control_url" {
+  description = "Mission Control Function URL — static value, since Lambda Function URLs don't change unless the function is destroyed and recreated. Avoids a Terraform dependency cycle (lambda -> mission_control -> step_functions -> lambda)."
+  type        = string
+  default     = "https://zo2xcsg4peci4rjafppqg27ole0ryqcz.lambda-url.us-east-1.on.aws/"
+}

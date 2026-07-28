@@ -13,6 +13,12 @@ variable "slack_webhook_url" {
   default   = ""
 }
 
+variable "mission_control_url" {
+  description = "Mission Control Function URL, linked in Slack approval messages"
+  type        = string
+  default     = ""
+}
+
 variable "lambda_role_arns" {
   description = "One IAM role per function: anomaly_analyser, runbook_assistant, cost_reporter, remediator"
   type        = map(string)
