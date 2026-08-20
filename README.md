@@ -9,7 +9,7 @@
 When something breaks in the cloud at 3 a.m., a person usually has to notice
 the alarm, dig through logs to figure out what went wrong, decide on a fix, and
 run it. This project does the noticing, figuring-out, and explaining
-automatically — then waits for a human to say "yes, go ahead" before it touches
+automatically then waits for a human to say "yes, go ahead" before it touches
 anything.
 
 The AI reads the alarm and writes a plain-English explanation. It never decides
@@ -24,9 +24,10 @@ what to change on its own, and nothing runs without someone approving it first.
 | **Compute** | AWS Lambda, ECS Fargate, API Gateway |
 | **Orchestration** | Step Functions, EventBridge |
 | **Monitoring** | CloudWatch (Logs, Metrics, Alarms) |
-| **AI** | Anthropic Claude API (Planned: Amazon Bedrock) |
+| **AI** | Amazon Bedrock (Claude Sonnet 4.5, cross-region inference profile) |
 | **Infrastructure** | Terraform (8 modules) |
 | **Storage** | S3, Secrets Manager |
+| **Networking** | Application Load Balancer, NAT Gateway, private subnets |
 | **Language** | Python 3.12 |
 | **CI/CD** | GitHub Actions |
 | **Runbook Format** | Markdown + RAG retrieval |
@@ -49,7 +50,7 @@ what to change on its own, and nothing runs without someone approving it first.
 
 ✅ **RAG runbook assistant** — Answers operational questions by reading team's own Markdown docs
 
-✅ **Mission Control dashboard** — Web UI for approvals, incident history, and Q&A
+✅ **Mission Control dashboard** — Web UI for approvals, incident history, cost tracking, and Q&A
 
 ---
 
@@ -62,10 +63,12 @@ CloudWatch Alarm
        ↓
  Step Functions (orchestrates workflow)
        ↓
- anomaly_analyser Lambda (calls Claude)
+ anomaly_analyser Lambda (calls Claude via Bedrock)
        ↓
  Claude writes root cause + suggested action
        ↓
+ urgency LOW? ──────────────▶ logged automatically, no approval needed
+       ↓ (MEDIUM / HIGH / CRITICAL)
  Slack notification (human sees analysis)
        ↓
  Mission Control dashboard (human approves or rejects)
@@ -82,6 +85,13 @@ CloudWatch Alarm
 ## Full Architecture Diagram
 
 <img width="1331" height="663" alt="diagram AI OPS PLATFORM" src="https://github.com/user-attachments/assets/25845f32-c4a8-4bac-8bd8-bc01264cd50f" />
+
+**Reading the diagram, left to right:** CloudWatch and EventBridge detect and
+route the event → Step Functions orchestrates the whole workflow → the AI
+Reasoning Layer (`anomaly_analyser`, Bedrock, `runbook_assistant`,
+`cost_reporter`) does the thinking → Human Governance (Slack, Mission Control,
+`remediator`) is where every decision and every infrastructure change actually
+happens. The full function-by-function breakdown is in the table below.
 
 ---
 
@@ -105,6 +115,8 @@ CloudWatch Alarm
 The core guarantee: **the AI never holds the keys**. It can only suggest actions
 from a short pre-approved list, and the actual target always comes from a
 Terraform table, never from the model. Unknown alarm? It just logs and waits.
+Only `MEDIUM`, `HIGH`, and `CRITICAL` urgency ever reach a human approval gate —
+`LOW` urgency incidents are logged automatically, with no action taken.
 
 ---
 
@@ -112,7 +124,7 @@ Terraform table, never from the model. Unknown alarm? It just logs and waits.
 
 | Function | Job | Can modify infrastructure? |
 |---|---|---|
-| **anomaly_analyser** | Read alarm, ask Claude, validate against rules | ❌ No (read-only) |
+| **anomaly_analyser** | Read alarm, ask Claude via Bedrock, validate against rules | ❌ No (read-only) |
 | **remediator** | Execute approved action (restart service) | ✅ Yes, allowlisted only |
 | **runbook_assistant** | Answer questions by reading Markdown docs | ❌ No (read-only) |
 | **cost_reporter** | Daily spend summary | ❌ No (read-only) |
@@ -147,6 +159,9 @@ Step Functions solves this:
 | **Handling alarms 24/7 without on-call SRE** | Fully automated detect and analyse; human just clicks approve/reject |
 | **Explaining incidents to non-engineers** | Claude generates plain English summaries, posted to Slack |
 | **Sharing operational knowledge** | RAG over Markdown runbooks stored in S3 |
+| **ALB and ECS tasks landing in different Availability Zones** | Dedicated subnets created for the ALB in the same AZs as the private task subnets |
+| **Deprecated Claude model version causing silent 400 errors** | Migrated to Amazon Bedrock with a cross-region inference profile; IAM widened to cover the model across regions |
+| **Custom CloudWatch metric silently never arriving** | `boto3` client rebuilt fresh on every call instead of once at container startup, with explicit success/failure logging |
 
 ---
 
@@ -159,7 +174,7 @@ terraform/modules/
 ├── step_functions/   # State machine definition
 ├── api_gateway/      # Runbook assistant endpoint
 ├── eventbridge/      # Alarm routing and schedule triggers
-├── ecs_app/          # Demo app + ECS cluster + alarms
+├── ecs_app/          # Demo app + ALB + NAT Gateway + private subnets + alarms
 ├── monitoring/       # Dashboards, alarms, SNS
 └── mission_control/  # Lambda Function URL + dashboard
 ```
@@ -177,8 +192,9 @@ Every push to main/develop:
 ```
 GitHub Actions
     ↓
-✅ Python unit tests (pytest)
+✅ 34 Python unit tests (pytest)
 ✅ Terraform fmt + validate
+✅ Checkov security scan
 ✅ Build & push Docker image to ECR
 ✅ Terraform apply
 ✅ Force ECS deployment
@@ -210,7 +226,7 @@ ai-ops-serverless-platform/
 │   ├── runbook_assistant/     # Q&A
 │   ├── cost_reporter/         # Daily summary
 │   ├── mission_control/       # Dashboard
-│   └── tests/                 # pytest suite
+│   └── tests/                 # 34-test pytest suite
 ├── runbooks/                  # Markdown docs for RAG
 ├── docs/adr/                  # Architecture Decision Records
 ├── events/                    # Test payloads
@@ -225,29 +241,35 @@ ai-ops-serverless-platform/
 |---|---|
 | **Idle** (no traffic, no alarms) | ~$0.60 |
 | **Example workload** (10 incidents/day) | ~$3.00 |
-| **With demo app running 24/7** | ~$9.60 |
+| **With demo app + ALB + NAT Gateway running 24/7** | ~$55–60 |
 
-Serverless means you pay only for what you use. The demo app (ECS Fargate) is
-there to show the system working live; removing it drops costs back to under $1/month.
+Serverless means you pay only for what you use. The ALB, NAT Gateway, and demo
+app (ECS Fargate) exist to show the system working live, behind a properly
+private network, the way a real production workload would be deployed.
+Removing them drops the always-on cost back to under $1/month, since Lambda,
+Step Functions, and CloudWatch are pay-per-use.
+
+This stack deliberately does not run a WAF in front of the ALB, and serves
+plain HTTP rather than HTTPS — for a portfolio demo with no real customer
+traffic and no owned domain routed through this AWS account, the added monthly
+cost didn't justify the benefit. Both tradeoffs are documented explicitly in
+the CI pipeline's Checkov configuration rather than silently skipped.
 
 ---
 
 ## Current Status
 
 ✅ **Working end-to-end:**
-- Demo app (ECS Fargate) with realistic alarms
+- Demo app (ECS Fargate) behind an ALB, in private subnets, with real alarms
 - CloudWatch → EventBridge → Step Functions workflow
-- Lambda analysis (Anthropic API)
+- Lambda analysis via Amazon Bedrock (Claude Sonnet 4.5)
+- Urgency-based routing: only MEDIUM/HIGH/CRITICAL reach human approval
 - Human approval gate (Mission Control dashboard)
 - Slack notifications
 - Terraform 8-module architecture
-- GitHub Actions CI/CD pipeline
+- GitHub Actions CI/CD pipeline with 34 automated tests and security scanning
 
-⏳ **Next steps:**
-- Move to Amazon Bedrock (pending model approval)
-- Fold Mission Control permissions into Terraform
-- Add multi-region support
-- Broader remediation actions (SSM Automation, EKS)
+⏳ **Next up:** see the Roadmap below.
 
 ---
 
@@ -276,11 +298,11 @@ This project demonstrates:
 - ECS Fargate, ECR, CloudWatch
 - IAM (least-privilege roles per function)
 - Secrets Manager, S3
-- VPC and networking
+- VPC and networking (ALB, NAT Gateway, private subnets)
 
 **AI/ML Integration**
-- LLM API integration (Claude)
-- Prompt engineering (constrained prompts)
+- LLM API integration (Claude via Amazon Bedrock)
+- Prompt engineering (constrained prompts, decision guidance)
 - RAG (Retrieval-Augmented Generation) for runbooks
 - Safe AI guardrails (allowlists, deterministic execution)
 
@@ -289,6 +311,7 @@ This project demonstrates:
 - Audit trails and compliance
 - Real-time monitoring and alerting
 - Cost awareness and optimization
+- Debugging cross-region IAM, networking mismatches, and silent failures
 
 ---
 
@@ -296,8 +319,8 @@ This project demonstrates:
 
 | Phase | Focus |
 |---|---|
-| **Now** | Bedrock integration, Terraform completeness |
-| **Q3 2026** | Multi-region, advanced cost analytics |
+| **Now** | Terraform completeness (Mission Control permissions), expanded runbook catalog |
+| **Q3 2026** | Multi-region support, advanced cost analytics |
 | **Q4 2026** | Broader remediation (SSM Automation), EKS support |
 | **2027** | Custom action framework, policy-based approvals |
 
@@ -331,15 +354,51 @@ aws stepfunctions start-execution \
   --input file://../../events/step-functions-input.json
 ```
 
+**Note:** the ALB has `enable_deletion_protection = true`. Set it to `false`
+and re-apply before running `terraform destroy`.
+
 ---
 
 ## Screenshots & Demo
 
-*[GIF: Full incident workflow — alarm → Slack → approval → restart → healthy]*
+A real run of the demo environment, from a healthy service to an incident
+resolved with human approval.
 
-*[Screenshot: Mission Control dashboard showing pending approvals]*
+**1. Orders API — healthy**
+*Continuously monitored by the platform. This is the normal state CloudWatch observes at every moment.*
 
-*[Screenshot: Step Functions execution history]*
+<img width="1004" height="594" alt="Orders API dashboard, service healthy" src="https://github.com/user-attachments/assets/44dd7bd3-087e-4458-b50a-6911a84c797d" />
+
+**2. Orders API — degraded**
+*The service starts failing and errors build up past the acceptable limit. This is the trigger that fires the CloudWatch alarm.*
+
+<img width="1086" height="556" alt="Orders API dashboard, service broken" src="https://github.com/user-attachments/assets/86cf60a5-73e7-45ab-b676-d31790eb7b56" />
+
+**3. Slack notification**
+*The explanation lands directly in Slack: problem summary, root cause, and proposed action, ready for review.*
+
+<img width="947" height="445" alt="Slack summary of the problem, part 1" src="https://github.com/user-attachments/assets/3f50ebc0-f631-4e03-971d-74c269363c5a" />
+<img width="1335" height="574" alt="Slack summary of the problem, part 2" src="https://github.com/user-attachments/assets/9f79c9e9-82d6-4977-8573-e06de392bd45" />
+
+**4. Mission Control — approval pending**
+*The suggested action waits here until a person decides. The platform explicitly states the target was resolved by the system, not chosen by the AI.*
+
+<img width="981" height="497" alt="Mission Control dashboard, approve or reject" src="https://github.com/user-attachments/assets/abd8e089-33fb-4b53-b3fd-1331687b3252" />
+
+**5. Mission Control — incident history**
+*Every workflow execution, with status, start time, and end time, kept automatically.*
+
+<img width="973" height="630" alt="Mission Control dashboard, incident history" src="https://github.com/user-attachments/assets/33497dc0-2f07-4de4-a651-8240d815d9e0" />
+
+**6. Mission Control — costs**
+*Real spend over the last 7 days, and which AWS services weigh most on the bill, in full transparency.*
+
+<img width="975" height="580" alt="Mission Control dashboard, cost report" src="https://github.com/user-attachments/assets/a2660e9e-dd19-4405-91fb-49739f9ad10b" />
+
+**7. Mission Control — runbook assistant**
+*A real operational question, answered using the team's own documentation via RAG.*
+
+<img width="973" height="630" alt="Mission Control dashboard, runbook assistant answer" src="https://github.com/user-attachments/assets/74fc61fd-c7ab-4e28-b083-7ac943106d91" />
 
 ---
 
@@ -358,5 +417,3 @@ Cloud Engineer | AWS | Infrastructure as Code
 *This project demonstrates production incident-response patterns: event-driven architecture,
 safe AI integration, Infrastructure as Code, and human governance. Everything is version-controlled,
 tested, and deployed via CI/CD.*
-
-
